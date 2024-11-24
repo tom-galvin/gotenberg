@@ -38,6 +38,9 @@ var dither = [
   [0, 1, 0, 1],
   [2, 3, 2, 3]
 ];
+const convertImageToBitmapData = () => {
+
+};
 const createCommandsForImage = (device) => {
   /**
    * This turns the image into the canvas into one or more commands to the printer to print a bitmap.
