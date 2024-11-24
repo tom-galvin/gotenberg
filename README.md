@@ -46,3 +46,9 @@ It's named after [this guy](https://en.wikipedia.org/wiki/Johannes_Gutenberg).
 * Show battery/etc status in the frontend
 * Better UI for printing
 * Do less rendering work in the browser and move to the backend
+
+## example
+
+![The web UI](img/ui.png)
+
+![The result](img/result.png)
