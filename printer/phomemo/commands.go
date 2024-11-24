@@ -4,7 +4,6 @@ package phomemo
 // TODO: make the backend do the interesting bit & make the frontend just do
 // the image rendering
 
-
 const (
   Esc = 0x1B
   GS = 0x1D

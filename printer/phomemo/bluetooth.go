@@ -30,17 +30,6 @@ func (p *PhomemoPrinter) Close() error {
   return nil
 }
 
-func chunkifyBytes(b []byte, sz int) [][]byte {
-  chunks := make([][]byte, 0, (len(b)+sz-1)/sz)
-
-  for sz < len(b) {
-    b, chunks = b[sz:], append(chunks, b[0:sz:sz])
-  }
-  chunks = append(chunks, b)
-
-  return chunks
-}
-
 func (p *PhomemoPrinter) WriteData(data []byte) error {
   _, err := p.writer.WriteWithoutResponse(data)
   if err != nil {
@@ -53,13 +42,10 @@ type PhomemoPrinterProvider struct {
 }
 
 func (p *PhomemoPrinterProvider) GetPrinter(adapter *bluetooth.Adapter) (printer.Printer, error) {
-  // Channel to receive discovered devices
   devices := make(chan bluetooth.ScanResult, 1)
 
-  // Start scanning for the device
   go func() {
     err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-      // Filter for the device named "T02"
       if result.LocalName() == "T02" {
         fmt.Println("Found device:", result.LocalName())
         devices <- result
@@ -72,7 +58,6 @@ func (p *PhomemoPrinterProvider) GetPrinter(adapter *bluetooth.Adapter) (printer
     }
   }()
 
-  // Wait for the device to be discovered
   dev, ok := <-devices
 
   if !ok {
@@ -80,7 +65,6 @@ func (p *PhomemoPrinterProvider) GetPrinter(adapter *bluetooth.Adapter) (printer
     return nil, errors.New("No devices found")
   }
 
-  // Connect to the device
   fmt.Println("Connecting to device...")
   peripheral, err := adapter.Connect(dev.Address, bluetooth.ConnectionParams{})
   if err != nil {
