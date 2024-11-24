@@ -5,7 +5,7 @@ import (
 )
 
 type Printer interface {
-	WriteData(data []byte) error
+  WriteData(data []byte) error
   Close() error
 }
 

@@ -31,14 +31,14 @@ func (p *PhomemoPrinter) Close() error {
 }
 
 func chunkifyBytes(b []byte, sz int) [][]byte {
-	chunks := make([][]byte, 0, (len(b)+sz-1)/sz)
+  chunks := make([][]byte, 0, (len(b)+sz-1)/sz)
 
-	for sz < len(b) {
-		b, chunks = b[sz:], append(chunks, b[0:sz:sz])
-	}
-	chunks = append(chunks, b)
+  for sz < len(b) {
+    b, chunks = b[sz:], append(chunks, b[0:sz:sz])
+  }
+  chunks = append(chunks, b)
 
-	return chunks
+  return chunks
 }
 
 func (p *PhomemoPrinter) WriteData(data []byte) error {
@@ -53,48 +53,48 @@ type PhomemoPrinterProvider struct {
 }
 
 func (p *PhomemoPrinterProvider) GetPrinter(adapter *bluetooth.Adapter) (printer.Printer, error) {
-	// Channel to receive discovered devices
-	devices := make(chan bluetooth.ScanResult, 1)
+  // Channel to receive discovered devices
+  devices := make(chan bluetooth.ScanResult, 1)
 
-	// Start scanning for the device
-	go func() {
-		err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-			// Filter for the device named "T02"
-			if result.LocalName() == "T02" {
-				fmt.Println("Found device:", result.LocalName())
-				devices <- result
-				adapter.StopScan()
-			}
-		})
-		if err != nil {
-			fmt.Println("Failed to scan for devices:", err)
-			close(devices)
-		}
-	}()
+  // Start scanning for the device
+  go func() {
+    err := adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
+      // Filter for the device named "T02"
+      if result.LocalName() == "T02" {
+        fmt.Println("Found device:", result.LocalName())
+        devices <- result
+        adapter.StopScan()
+      }
+    })
+    if err != nil {
+      fmt.Println("Failed to scan for devices:", err)
+      close(devices)
+    }
+  }()
 
-	// Wait for the device to be discovered
-	dev, ok := <-devices
+  // Wait for the device to be discovered
+  dev, ok := <-devices
 
-	if !ok {
-		fmt.Println("No devices found.")
-		return nil, errors.New("No devices found")
-	}
+  if !ok {
+    fmt.Println("No devices found.")
+    return nil, errors.New("No devices found")
+  }
 
-	// Connect to the device
-	fmt.Println("Connecting to device...")
-	peripheral, err := adapter.Connect(dev.Address, bluetooth.ConnectionParams{})
-	if err != nil {
-		fmt.Println("Failed to connect to device:", err)
+  // Connect to the device
+  fmt.Println("Connecting to device...")
+  peripheral, err := adapter.Connect(dev.Address, bluetooth.ConnectionParams{})
+  if err != nil {
+    fmt.Println("Failed to connect to device:", err)
     return nil, err
-	}
+  }
 
-	// Discover the primary service (UUID 0xFF00)
-	fmt.Println("Discovering service...")
-	services, err := peripheral.DiscoverServices([]bluetooth.UUID{getUUID(Service)})
-	if err != nil {
-		fmt.Println("Failed to discover service:", err)
+  // Discover the primary service (UUID 0xFF00)
+  fmt.Println("Discovering service...")
+  services, err := peripheral.DiscoverServices([]bluetooth.UUID{getUUID(Service)})
+  if err != nil {
+    fmt.Println("Failed to discover service:", err)
     return nil, err
-	}
+  }
 
   fmt.Println("Discovering characteristics...")
   characteristics, err := services[0].DiscoverCharacteristics([]bluetooth.UUID{getUUID(Writer), getUUID(Notifier)})
