@@ -4,7 +4,7 @@ This is an interface for Phonemo T02/M02 thermal laser printers.
 
 The server is written in Go, and connects to the printer using Bluetooth Low Energy. The UI for controlling what gets printed (currently just text, hopefully more soon!) is exposed as a web interface on port 8080. The web interface does the job of rendering the data to draw to a bitmap, which is just POSTed to the server to print.
 
-It's currently very rough around the edges but it does work, watch this space.
+It's currently very rough around the edges but it does work. The entire thing was originally just in JavaScript including the bluetooth stuff, but that relies on the Bluetooth Low Energy web API which doesn't have very good adoption so I'm moving it to Go. I've also never used Go before so it's more of a project for myself than anything
 
 ## how to use
 
