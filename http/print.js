@@ -37,9 +37,9 @@ var dither = [
   [0, 1, 0, 1],
   [2, 3, 2, 3]
 ];
-const convertImageToBitmapData = () => {
+const convertImageToBitmapData = (device) => {
   const ctx = canvas.getContext('2d');
-  const imgw = canvas.width, imgh = canvas.height;
+  const imgw = Math.min(device.MAX_WIDTH_BYTES * 8, canvas.width), imgh = canvas.height;
   const imageData = ctx.getImageData(0, 0, imgw, imgh);
   const pixelArray = imageData.data;
 
@@ -69,7 +69,8 @@ const DEVICE_TYPES = {
 const printImageServer = async () => {
   try {
     // Perform the POST request
-    const dataToSend = JSON.stringify(convertImageToBitmapData());
+    const device = DEVICE_TYPES.PHOMEMO_T02;
+    const dataToSend = JSON.stringify(convertImageToBitmapData(device));
     console.log(dataToSend);
     const response = await fetch("/print", {
       method: "POST",
