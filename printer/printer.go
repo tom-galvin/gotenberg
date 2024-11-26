@@ -5,8 +5,8 @@ import (
 )
 
 type Printer interface {
-  WriteData(data []byte) error
-  WriteBitmap(b *PackedBitmap) error
+  WriteBitmap(b *PackedBitmap)
+  GetBatteryLevel() int
 
   Close() error
 }

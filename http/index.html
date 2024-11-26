@@ -8,10 +8,13 @@
     <div class="main-box">
       <div>
         <textarea id="text" style="width:384px; height:128px;"></textarea>
-        <button id="idButton">Connect</button>
+        <div>
+          <button id="idButton">Print</button>
+          <span id="battery-level">Connecting...</span>
+        </div>
       </div>
       <div>
-        <p>Bitmap height: <span id="bitmap-height">0</span></p>
+        <div style="display: none">Bitmap height: <span id="bitmap-height">0</span></div>
         <canvas class="canvas" id="theCanvas"></canvas>
       </div>
     </div>

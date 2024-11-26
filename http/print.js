@@ -66,6 +66,31 @@ const DEVICE_TYPES = {
   }
 };
 
+const fetchBatteryLevel = async () => {
+  try {
+    // Perform the POST request
+    const response = await fetch("/battery", {method: "GET"});
+
+    // Ensure the response is OK
+    if (!response.ok) {
+      logger.error(`HTTP error! Status: ${response.status}`);
+    }
+
+    // Read the response as text
+    const responseText = await response.text();
+
+    return parseInt(responseText);
+  } catch (error) {
+    console.error("Error during POST request:", error);
+    throw error; // Rethrow or handle appropriately
+  }
+};
+
+const updateBatteryLevel = async () => {
+  const batteryLevel = await fetchBatteryLevel();
+  document.getElementById("battery-level").innerHTML = "Battery: " + batteryLevel + "%";
+};
+
 const printImageServer = async () => {
   try {
     // Perform the POST request
@@ -81,14 +106,13 @@ const printImageServer = async () => {
     // Ensure the response is OK
     if (!response.ok) {
       logger.error(`HTTP error! Status: ${response.status}`);
+
+      // Read the response as text
+      const responseText = await response.text();
+
+      // Return or store the response as a string
+      alert(responseText);
     }
-
-    // Read the response as text
-    const responseText = await response.text();
-
-    // Return or store the response as a string
-    alert(responseText);
-    return responseText;
   } catch (error) {
     console.error("Error during POST request:", error);
     throw error; // Rethrow or handle appropriately
@@ -98,3 +122,7 @@ const printImageServer = async () => {
 document.getElementById("idButton").onclick = async() => {
   await printImageServer();
 };
+
+const batteryInterval = setInterval(updateBatteryLevel, 10000);
+
+document.addEventListener("DOMContentLoaded", updateBatteryLevel);

@@ -42,6 +42,15 @@ func main() {
     handlePrint(printer, w, r)
   })
 
+  http.HandleFunc("/battery", func(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodGet {
+      http.Error(w, "Only GET method is supported", http.StatusMethodNotAllowed)
+      return
+    }
+    w.WriteHeader(http.StatusOK)
+    fmt.Fprintf(w, "%v", printer.GetBatteryLevel())
+  })
+
   port := "8080"
   fmt.Printf("Starting server on port %s...\n", port)
   if err := http.ListenAndServe(":"+port, nil); err != nil {
@@ -51,7 +60,6 @@ func main() {
 }
 
 func handlePrint(p printer.Printer, w http.ResponseWriter, r *http.Request) {
-  // Ensure the request is a POST
   if r.Method != http.MethodPost {
     http.Error(w, "Only POST method is supported", http.StatusMethodNotAllowed)
     return
@@ -83,13 +91,7 @@ func handlePrint(p printer.Printer, w http.ResponseWriter, r *http.Request) {
 
   packedBitmap := printer.PackBitmap(bitmap)
 
-  err = p.WriteBitmap(packedBitmap)
+  p.WriteBitmap(packedBitmap)
   
-  if err == nil {
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte("Upload successful"))
-  } else {
-    w.WriteHeader(http.StatusServiceUnavailable)
-    w.Write([]byte(err.Error()))
-  }
+  w.WriteHeader(http.StatusOK)
 }
