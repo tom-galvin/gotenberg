@@ -6,6 +6,8 @@ import (
 
 type Printer interface {
   WriteData(data []byte) error
+  WriteBitmap(b *PackedBitmap) error
+
   Close() error
 }
 

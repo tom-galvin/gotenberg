@@ -29,11 +29,11 @@ func initPrinter() []byte {
 }
 
 func setJustify(justify Justify) []byte {
-  return []byte{Esc, byte(justify)}
+  return []byte{Esc, 0x61, byte(justify)}
 }
 
 func setLaserIntensity(intensity LaserIntensity) []byte {
-  return []byte{US, 0x02, byte(intensity)}
+  return []byte{US, 0x11, 0x02, byte(intensity)}
 }
 
 func printBitmap(widthBytes byte, heightBits uint16) []byte {

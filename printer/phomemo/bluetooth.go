@@ -20,17 +20,17 @@ func getUUID(t DeviceType) bluetooth.UUID {
   })
 }
 
-type PhomemoPrinter struct {
+type PhomemoBluetoothPrinter struct {
   device bluetooth.Device
   writer bluetooth.DeviceCharacteristic
 }
 
-func (p *PhomemoPrinter) Close() error {
+func (p *PhomemoBluetoothPrinter) Close() error {
   p.device.Disconnect()
   return nil
 }
 
-func (p *PhomemoPrinter) WriteData(data []byte) error {
+func (p *PhomemoBluetoothPrinter) WriteData(data []byte) error {
   _, err := p.writer.WriteWithoutResponse(data)
   if err != nil {
     return err
@@ -38,10 +38,54 @@ func (p *PhomemoPrinter) WriteData(data []byte) error {
   return nil
 }
 
-type PhomemoPrinterProvider struct {
+const maxBitmapHeight = 256
+func (p *PhomemoBluetoothPrinter) WriteBitmap(b *printer.PackedBitmap) error {
+  if b.Stride() > 0x30 {
+    return fmt.Errorf("Bitmap too wide for printer: %s", b)
+  }
+  strideU8 := byte(b.Stride())
+
+  commands := [][]byte{
+    initPrinter(),
+    setJustify(Centre),
+    setLaserIntensity(Low),
+  }
+
+  for bitmapStart := 0; bitmapStart < b.Height(); bitmapStart += maxBitmapHeight {
+    bitmapEnd := bitmapStart + maxBitmapHeight
+
+    if bitmapEnd >= b.Height() {
+      bitmapEnd = b.Height()
+    }
+
+    slice := b.Chunk(bitmapStart, bitmapEnd)
+    sliceHeightU16 := uint16(slice.Height())
+
+    commands = append(commands,
+      printBitmap(strideU8, sliceHeightU16),
+      slice.Data(),
+    )
+  }
+
+  commands = append(commands,
+    feedLines(4),
+    queryBatteryStatus(),
+  )
+
+  for _, command := range commands {
+    _, err := p.writer.WriteWithoutResponse(command)
+    if err != nil {
+      return err
+    }
+  }
+
+  return nil
 }
 
-func (p *PhomemoPrinterProvider) GetPrinter(adapter *bluetooth.Adapter) (printer.Printer, error) {
+type BluetoothProvider struct {
+}
+
+func (p *BluetoothProvider) GetPrinter(adapter *bluetooth.Adapter) (printer.Printer, error) {
   devices := make(chan bluetooth.ScanResult, 1)
 
   go func() {
@@ -89,7 +133,7 @@ func (p *PhomemoPrinterProvider) GetPrinter(adapter *bluetooth.Adapter) (printer
 
   writer, notifier := characteristics[0], characteristics[1]
 
-  printer := PhomemoPrinter {
+  printer := PhomemoBluetoothPrinter {
     device: peripheral,
     writer: writer,
   }
