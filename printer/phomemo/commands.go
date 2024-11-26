@@ -87,3 +87,7 @@ func queryFirmwareVersion() []byte {
 func queryDeviceSerial() []byte {
   return []byte{US, 0x11, 0x09}
 }
+
+func queryAny(t byte) []byte {
+  return []byte{US, 0x11, t}
+}

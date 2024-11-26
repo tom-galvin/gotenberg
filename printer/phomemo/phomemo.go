@@ -3,7 +3,6 @@ package phomemo
 import (
   "log/slog"
   "errors"
-  "time"
   "gotenburg/printer"
   "tinygo.org/x/bluetooth"
 )
@@ -20,7 +19,6 @@ func getUUID(t DeviceType) bluetooth.UUID {
     0x00, 0x00, 0xff, byte(t), 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb,
   })
 }
-
 
 type BluetoothProvider struct {
 }
@@ -53,7 +51,7 @@ func (p *BluetoothProvider) GetPrinter(adapter *bluetooth.Adapter) (printer.Prin
   }
 
   slog.Debug("Connecting to device...")
-  peripheral, err := adapter.Connect(dev.Address, bluetooth.ConnectionParams{})
+  device, err := adapter.Connect(dev.Address, bluetooth.ConnectionParams{})
   if err != nil {
     slog.Error("Failed to connect to device:",
       "err", err,
@@ -63,12 +61,12 @@ func (p *BluetoothProvider) GetPrinter(adapter *bluetooth.Adapter) (printer.Prin
 
   // Discover the primary service (UUID 0xFF00)
   slog.Debug("Discovering service...")
-  services, err := peripheral.DiscoverServices([]bluetooth.UUID{getUUID(Service)})
+  services, err := device.DiscoverServices([]bluetooth.UUID{getUUID(Service)})
   if err != nil {
     slog.Error("Failed to discover service:",
       "err", err,
     )
-    peripheral.Disconnect()
+    device.Disconnect()
     return nil, err
   }
 
@@ -78,34 +76,12 @@ func (p *BluetoothProvider) GetPrinter(adapter *bluetooth.Adapter) (printer.Prin
     slog.Error("Failed to discover characteristics:",
       "err", err,
     )
-    peripheral.Disconnect()
+    device.Disconnect()
     return nil, err
   }
 
   writer, notifier := characteristics[0], characteristics[1]
 
-  printer := PhomemoBluetoothPrinter {
-    device: peripheral,
-    writer: writer,
-    queue: make(chan PhomemoAction),
-    batteryLevel: -1,
-    batteryLevelChannel: make(chan int),
-    statusTicker: time.NewTicker(10 * time.Second),
-    ready: make(chan bool),
-  }
-  err = notifier.EnableNotifications(func (d []byte) {
-    printer.handleData(d)
-  })
-  if err != nil {
-    slog.Error("Couldn't enable notifications:",
-      "err", err,
-    )
-    peripheral.Disconnect()
-    return nil, err
-  }
 
-  go printer.startWriteQueue()
-  go printer.statusTickerFunc()
-
-  return &printer, nil
+  return NewPrinter(device, writer, notifier)
 }
