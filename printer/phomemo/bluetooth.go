@@ -58,7 +58,7 @@ func (p *PhomemoBluetoothPrinter) WriteBitmap(b *printer.PackedBitmap) error {
       bitmapEnd = b.Height()
     }
 
-    slice := b.Chunk(bitmapStart, bitmapEnd)
+    slice := b.Chunk(bitmapStart, bitmapEnd - bitmapStart)
     sliceHeightU16 := uint16(slice.Height())
 
     commands = append(commands,
