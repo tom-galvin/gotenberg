@@ -127,7 +127,7 @@ func (p *BluetoothPrinter) pollBatteryLevel(block bool) {
 func (p *BluetoothPrinter) unblock(action string) {
   select {
   case p.ready <- true:
-    slog.Info("Printer finished action:",
+    slog.Debug("Printer finished action:",
       "action", action)
   default:
     slog.Debug("Printer wasn't waiting:",
@@ -147,16 +147,16 @@ func (p *BluetoothPrinter) handleData(d []byte) {
     slog.Info("Printer info:", "info", d[3:])
   case hasPrefix(d, 0x1a, 0x04):
     batteryLevel := (int(d[2]))
-    slog.Info("Battery level:",
+    slog.Debug("Battery level:",
       "level", batteryLevel,
     )
     p.batteryLevel = batteryLevel
   case hasPrefix(d, 0x1a, 0x07):
-    slog.Info("Firmware version:",
+    slog.Info("Reader: ping received",
       "firmwareVersion", fmt.Sprintf("%v.%v.%v", d[2], d[3], d[4]),
     )
   case hasPrefix(d, 0x1a, 0x06) && (d[2] == 0x88 || d[2] == 0x89):
-    slog.Info("Paper status:",
+    slog.Info("Reader: paper status changed",
       "loaded", d[2] & 1 == 1,
     )
   case hasPrefix(d, 0x01, 0x01):
@@ -171,17 +171,17 @@ func (p *BluetoothPrinter) handleData(d []byte) {
 }
 
 func (p *BluetoothPrinter) startWriteQueue() {
-  slog.Info("Waiting for printer to become ready after connect")
+  slog.Info("Writer: Waiting for printer to become ready after connect")
   <-p.ready
   counter := 0
-  slog.Info("Waiting for action", "counter", counter)
+  slog.Debug("Writer: Waiting for action", "counter", counter)
   for action := range p.queue {
     commands := [][]byte{
       initPrinter(),
     }
 
     if action.bitmapToPrint != nil {
-      slog.Info("Executing action to print bitmap")
+      slog.Info("Writer: Sending bitmap data to printer")
       commands = append(commands,
         setJustify(Centre),
         setLaserIntensity(Low),
@@ -193,7 +193,7 @@ func (p *BluetoothPrinter) startWriteQueue() {
     }
 
     if action.fetchStatus {
-      slog.Info("Executing action to fetch status")
+      slog.Info("Writer: Pinging printer status")
       commands = append(commands,
         queryBatteryStatus(),
         queryFirmwareVersion(),
@@ -211,14 +211,14 @@ func (p *BluetoothPrinter) startWriteQueue() {
     }
 
     if action.isBlocking {
-      slog.Info("Waiting for printer to become ready after action", "counter", counter)
+      slog.Info("Writer: Waiting for printer to become ready")
       _, ok := <-p.ready
 
       if p.connected && ok {
-        slog.Info("Completing action")
+        slog.Debug("Completing action")
         p.succeeded <- true
       } else {
-        slog.Warn("Printer disconnected while waiting for command completion")
+        slog.Warn("Writer: Printer disconnected before becoming ready")
 
         if p.connected != ok {
           slog.Warn("Potential race condition?",
@@ -230,7 +230,7 @@ func (p *BluetoothPrinter) startWriteQueue() {
       }
     }
     counter += 1
-    slog.Info("Waiting for action", "counter", counter)
+    slog.Debug("Waiting for action", "counter", counter)
   }
 }
 
