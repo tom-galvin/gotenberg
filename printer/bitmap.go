@@ -1,7 +1,12 @@
 package printer
 
-import "fmt"
-import "gotenburg/model"
+import (
+  "fmt"
+  "gotenburg/model"
+  "image"
+  "image/color"
+  "image/rectangle"
+)
 
 type Bitmap interface {
   Width() int
@@ -28,6 +33,34 @@ func (b *PixelBitmap) GetBit(x int, y int) byte {
 
 func (b *PixelBitmap) String() string {
   return fmt.Sprintf("PixelBitmap(%d,%d)", b.width, b.height)
+}
+
+func BitmapFromPaletted(i *image.Paletted) (*PixelBitmap, error) {
+  byteMap := make([]byte, len(i.Palette))
+  for j := 0; j < 2; j++ {
+    if colorGray16, ok := i.Palette[j].(color.Gray16); ok {
+      if colorGray16.Y > 0x8000 {
+        byteMap[j] = 0
+      } else {
+        byteMap[j] = 1
+      }
+    } else {
+      return nil, fmt.Errorf("Color at index %d in palette (%v) is not a Gray16", j, i.Palette[j])
+    }
+  }
+
+  width, height := i.Bounds().Dx(), i.Bounds().Dy()
+  pixels := make([][]byte, height)
+  for y := range height {
+    row := make([]byte, width)
+    for x := range width {
+      row[x] = byteMap[i.ColorIndexAt(x, y)]
+    }
+
+    pixels[y] = row
+  }
+
+  return &PixelBitmap{pixels, width, height}, nil
 }
 
 func BitmapFromRequest(r *model.PrintingRequest) (*PixelBitmap, error) {

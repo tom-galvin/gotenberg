@@ -1,7 +1,11 @@
 package printer
 
+import (
+  "image"
+)
+
 type Printer interface {
-  WriteBitmap(b *PackedBitmap) error
+  WriteImage(image.Image) error
   GetBatteryLevel() (int, error)
   IsConnected() bool
 }

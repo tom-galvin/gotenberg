@@ -5,6 +5,7 @@ import (
   "bytes"
   "time"
   "log/slog"
+  "image"
   "gotenburg/printer"
   "tinygo.org/x/bluetooth"
 )
@@ -85,7 +86,16 @@ func (p *BluetoothPrinter) GetBatteryLevel() (int, error) {
   return p.batteryLevel, nil
 }
 
-func (p *BluetoothPrinter) WriteBitmap(b *printer.PackedBitmap) error {
+func (p *BluetoothPrinter) WriteImage(i image.Image) error {
+  if pb, err := packImageToPhomemoBitmap(i); err != nil {
+    slog.Error("Image couldn't be packed to bitmap", "error", err)
+    return err
+  } else {
+    return p.writePackedBitmap(pb)
+  }
+}
+
+func (p *BluetoothPrinter) writePackedBitmap(b *printer.PackedBitmap) error {
   if !p.connected {
     return fmt.Errorf("Printer is not connected")
   }

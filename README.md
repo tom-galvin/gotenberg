@@ -49,6 +49,6 @@ It's named after [this guy](https://en.wikipedia.org/wiki/Johannes_Gutenberg).
 
 ## example
 
-![The web UI](img/ui.png)
+![The web UI](docs/img/ui.png)
 
-![The result](img/result.png)
+![The result](docs/img/result.png)

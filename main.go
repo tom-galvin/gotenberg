@@ -3,11 +3,11 @@ package main
 import (
   "fmt"
   "log/slog"
-  "io"
   "os"
   "net/http"
-  "encoding/json"
-  "gotenburg/model"
+  "image"
+  _ "image/png"
+  _ "image/jpeg"
   "gotenburg/printer"
   "gotenburg/printer/phomemo"
 )
@@ -65,37 +65,27 @@ func handlePrint(p printer.PrinterProvider, w http.ResponseWriter, r *http.Reque
     return
   }
 
-  if r.Header.Get("Content-Type") != "application/octet-stream" {
+  contentType := r.Header.Get("Content-Type")
+  if contentType != "image/png" && contentType != "image/jpeg" {
     http.Error(w, "Invalid content type", http.StatusBadRequest)
     return
   }
 
-  body, err := io.ReadAll(r.Body)
+  image, format, err := image.Decode(r.Body)
+
   if err != nil {
-    http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+    http.Error(w, fmt.Sprintf("Couldn't read %s data: %v", contentType, err), http.StatusBadRequest)
     return
   }
   defer r.Body.Close()
 
-  fmt.Printf("Received %d bytes\n", len(body))
-
-  var request model.PrintingRequest
-  if err = json.Unmarshal(body, &request); err != nil {
-    http.Error(w, err.Error(), http.StatusBadRequest)
-  }
-
-  var bitmap printer.Bitmap
-  if bitmap, err = printer.BitmapFromRequest(&request); err != nil {
-    http.Error(w, err.Error(), http.StatusBadRequest)
-  }
-
-  packedBitmap := printer.PackBitmap(bitmap)
+  fmt.Printf("Received %d image\n", format)
 
   if err := p.Connect(); err != nil {
     slog.Error("Couldn't connect to printer!", "error", err)
     w.WriteHeader(http.StatusServiceUnavailable)
   } else {
-    err = p.GetPrinter().WriteBitmap(packedBitmap)
+    err = p.GetPrinter().WriteImage(image)
 
     if err == nil {
       w.WriteHeader(http.StatusOK)
