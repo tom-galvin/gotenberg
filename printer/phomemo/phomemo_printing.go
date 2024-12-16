@@ -1,8 +1,8 @@
-
 package phomemo
 
 import (
   "fmt"
+  "bytes"
   "time"
   "log/slog"
   "gotenburg/printer"
@@ -12,147 +12,165 @@ import (
 type Action struct {
   bitmapToPrint *printer.PackedBitmap
   fetchStatus bool
+  isBlocking bool
 }
 
 type BluetoothPrinter struct {
   device bluetooth.Device
   writer bluetooth.DeviceCharacteristic
+  notifier bluetooth.DeviceCharacteristic
   queue chan Action
-  batteryLevelChannel chan int
+  succeeded chan bool
   ready chan bool
   statusTicker *time.Ticker
   batteryLevel int
+  connected bool
 }
 
-func NewPrinter(device bluetooth.Device, writer bluetooth.DeviceCharacteristic, notifier bluetooth.DeviceCharacteristic) (*BluetoothPrinter, error) {
-  printer := BluetoothPrinter {
-    device: device,
-    writer: writer,
-    queue: make(chan Action),
-    batteryLevel: -1,
-    batteryLevelChannel: make(chan int),
-    statusTicker: time.NewTicker(10 * time.Second),
-    ready: make(chan bool),
-  }
-  err := notifier.EnableNotifications(func (d []byte) {
-    printer.handleData(d)
+func (p *BluetoothPrinter) initialise() error {
+  p.queue = make(chan Action)
+  p.ready = make(chan bool)
+  p.succeeded = make(chan bool)
+  p.statusTicker = time.NewTicker(10 * time.Second)
+
+  err := p.notifier.EnableNotifications(func (d []byte) {
+    p.handleData(d)
   })
   if err != nil {
     slog.Error("Couldn't enable notifications:",
       "err", err,
     )
-    device.Disconnect()
-    return nil, err
+
+    p.uninitialise()
+    return err
   }
 
-  go printer.startWriteQueue()
-  go printer.statusTickerFunc()
+  p.connected = true
 
-  return &printer, nil
-}
-
-func (p *BluetoothPrinter) Close() error {
-  p.device.Disconnect()
-  p.statusTicker.Stop()
+  go p.startWriteQueue()
+  go p.statusTickerFunc()
   return nil
 }
 
-func (p *BluetoothPrinter) GetBatteryLevel() int {
-  if p.batteryLevel < 0 {
-    slog.Info("Battery level queried before it's ready, fetching now")
-    p.pollBatteryLevel()
-    return <-p.batteryLevelChannel
-  } else {
-    return p.batteryLevel
-  }
+func (p *BluetoothPrinter) uninitialise() error {
+  p.device.Disconnect()
+  p.statusTicker.Stop()
+  close(p.queue)
+  close(p.ready)
+  close(p.succeeded)
+  p.connected = false
+
+  return nil
 }
 
-func (p *BluetoothPrinter) WriteBitmap(b *printer.PackedBitmap) {
+func (p *BluetoothPrinter) IsConnected() bool {
+  return p.connected
+}
+
+func (p *BluetoothPrinter) GetBatteryLevel() (int, error) {
+  if !p.connected {
+    return -1, fmt.Errorf("Device not connected")
+  }
+
+  if p.batteryLevel < 0 {
+    slog.Info("Battery level queried before it's ready, fetching now")
+    p.pollBatteryLevel(true)
+
+    succeeded := <-p.succeeded
+    if !succeeded {
+      return -1, fmt.Errorf("Device disconnected before battery level received")
+    }
+  }
+
+  return p.batteryLevel, nil
+}
+
+func (p *BluetoothPrinter) WriteBitmap(b *printer.PackedBitmap) error {
+  if !p.connected {
+    return fmt.Errorf("Printer is not connected")
+  }
   p.queue <- Action{
     bitmapToPrint: b,
+    isBlocking: true,
   }
+  succeeded := <-p.succeeded
+  if !succeeded {
+    return fmt.Errorf("Device disconnected while waiting for print operation")
+  }
+  return nil
 }
 
 func (p *BluetoothPrinter) statusTickerFunc() {
   for range p.statusTicker.C {
-    slog.Info("Polling for battery status")
-    p.pollBatteryLevel()
+    slog.Debug("Polling for battery status")
+    p.pollBatteryLevel(false)
   }
 }
 
-func (p *BluetoothPrinter) pollBatteryLevel() {
+func (p *BluetoothPrinter) pollBatteryLevel(block bool) {
   p.queue <- Action{
     fetchStatus: true,
+    isBlocking: block,
   }
+}
+
+func (p *BluetoothPrinter) unblock(action string) {
+  select {
+  case p.ready <- true:
+    slog.Info("Printer finished action:",
+      "action", action)
+  default:
+    slog.Debug("Printer wasn't waiting:",
+      "action", action)
+  }
+}
+
+func hasPrefix(d []byte, b ...byte) bool {
+  return len(d) >= len(b) && bytes.Equal(d[:len(b)], b)
 }
 
 func (p *BluetoothPrinter) handleData(d []byte) {
-  if len(d) > 2 && d[0] == 0x1A {
-    switch d[1] {
-    case 0x0f:
-      if len(d) == 3 && d[2] == 0x0c {
-        slog.Info("Printer finished printing")
-        p.ready <- true
-        return
-      }
-    case 0x3b:
-      if len(d) > 3 && d[2] == 0x04 {
-        slog.Info("Printer ready to accept data")
-        // I think this is a ready packet?
-        p.ready <- true
-        return
-      }
-    case 0x04:
-      if len(d) == 3 {
-        batteryLevel := (int(d[2]))
-        slog.Info("Battery level:",
-          "level", batteryLevel,
-        )
-        if p.batteryLevel < 0 {
-          // if this is the first time we've recorded the battery level then push to a channel in
-          // case anything is waiting for it
-          p.batteryLevelChannel <- batteryLevel
-        }
-        p.batteryLevel = batteryLevel
-        return
-      }
-    case 0x07:
-      if len(d) == 5 {
-        slog.Info("Firmware version:",
-          "firmwareVersion", fmt.Sprintf("%v.%v.%v", d[2], d[3], d[4]),
-        )
-        return
-      }
-    case 0x06:
-      if len(d) == 3 {
-        switch d[2] {
-        case 0x88, 0x89:
-          slog.Info("Paper status:",
-            "loaded", d[2] & 1 == 1,
-          )
-          return
-        }
-      }
-    }
-  } else if len(d) == 2 && d[0] == 0x01 && d[1] == 0x01 {
-    // Think the printer outputs this whenever it receives data successfully
-    return
+  switch {
+  case hasPrefix(d, 0x1a, 0x0f, 0x0c):
+    p.unblock("Print")
+  case hasPrefix(d, 0x1a, 0x3b, 0x04):
+    slog.Info("Printer info:", "info", d[3:])
+  case hasPrefix(d, 0x1a, 0x04):
+    batteryLevel := (int(d[2]))
+    slog.Info("Battery level:",
+      "level", batteryLevel,
+    )
+    p.batteryLevel = batteryLevel
+  case hasPrefix(d, 0x1a, 0x07):
+    slog.Info("Firmware version:",
+      "firmwareVersion", fmt.Sprintf("%v.%v.%v", d[2], d[3], d[4]),
+    )
+  case hasPrefix(d, 0x1a, 0x06) && (d[2] == 0x88 || d[2] == 0x89):
+    slog.Info("Paper status:",
+      "loaded", d[2] & 1 == 1,
+    )
+  case hasPrefix(d, 0x01, 0x01):
+    slog.Debug("Read command successfully")
+  case hasPrefix(d, 0x02, 0xb6, 0x00):
+    p.unblock("Connect")
+  default:
+    slog.Info("Received unknown notification:",
+      "data", fmt.Sprintf("%x", d),
+    )
   }
-
-  slog.Info("Received unknown notification:",
-    "data", fmt.Sprintf("%x", d),
-  )
 }
 
 func (p *BluetoothPrinter) startWriteQueue() {
+  slog.Info("Waiting for printer to become ready after connect")
+  <-p.ready
+  counter := 0
+  slog.Info("Waiting for action", "counter", counter)
   for action := range p.queue {
     commands := [][]byte{
       initPrinter(),
     }
 
     if action.bitmapToPrint != nil {
-      slog.Info("Waiting for printer to become ready...")
-      <-p.ready
       slog.Info("Executing action to print bitmap")
       commands = append(commands,
         setJustify(Centre),
@@ -181,6 +199,28 @@ func (p *BluetoothPrinter) startWriteQueue() {
         break
       }
     }
+
+    if action.isBlocking {
+      slog.Info("Waiting for printer to become ready after action", "counter", counter)
+      _, ok := <-p.ready
+
+      if p.connected && ok {
+        slog.Info("Completing action")
+        p.succeeded <- true
+      } else {
+        slog.Warn("Printer disconnected while waiting for command completion")
+
+        if p.connected != ok {
+          slog.Warn("Potential race condition?",
+            "connected", p.connected,
+            "ok", ok)
+        }
+
+        p.succeeded <- false
+      }
+    }
+    counter += 1
+    slog.Info("Waiting for action", "counter", counter)
   }
 }
 

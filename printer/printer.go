@@ -1,16 +1,12 @@
 package printer
 
-import (
-  "tinygo.org/x/bluetooth"
-)
-
 type Printer interface {
-  WriteBitmap(b *PackedBitmap)
-  GetBatteryLevel() int
-
-  Close() error
+  WriteBitmap(b *PackedBitmap) error
+  GetBatteryLevel() (int, error)
+  IsConnected() bool
 }
 
 type PrinterProvider interface {
-  GetPrinter(adapter *bluetooth.Adapter) (Printer, error)
+  GetPrinter() (Printer, error)
+  Disconnect() error
 }

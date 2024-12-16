@@ -1,4 +1,4 @@
-const FONT_HEIGHT = 17;
+const FONT_HEIGHT = 20;
 const FONT_NAME = 'Iosevka';
 
 const setPrintHeight = (y) => {

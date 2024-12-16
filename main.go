@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "log/slog"
   "io"
   "os"
   "net/http"
@@ -9,37 +10,31 @@ import (
   "gotenburg/model"
   "gotenburg/printer"
   "gotenburg/printer/phomemo"
-
-  "tinygo.org/x/bluetooth"
 )
 
 func main() {
   fmt.Println("Hello, Gotenburg!")
-
-  adapter := bluetooth.DefaultAdapter
-
-  err := adapter.Enable()
-  if err != nil {
-    fmt.Println("Failed to enable Bluetooth: ", err)
-    return
-  }
+  provider, err := phomemo.CreateProvider()
 
   fmt.Println("Scanning for devices...")
-
-  provider := phomemo.BluetoothProvider{}
-  printer, err := provider.GetPrinter(adapter)
-
-  if err != nil {
-    fmt.Println("Couldn't get printer", err)
+  if err = provider.FindDevice("T02"); err != nil {
+    slog.Error("Couldn't find printer", "err", err)
     return
   }
 
-  defer printer.Close()
+  _, err = provider.GetPrinter()
+
+  if err != nil {
+    fmt.Println("Couldn't connect to printer", err)
+    return
+  }
+
+  defer provider.Disconnect()
 
   http.Handle("/", http.FileServer(http.Dir("http")))
 
   http.HandleFunc("/print", func(w http.ResponseWriter, r *http.Request) {
-    handlePrint(printer, w, r)
+    handlePrint(provider, w, r)
   })
 
   http.HandleFunc("/battery", func(w http.ResponseWriter, r *http.Request) {
@@ -47,8 +42,21 @@ func main() {
       http.Error(w, "Only GET method is supported", http.StatusMethodNotAllowed)
       return
     }
-    w.WriteHeader(http.StatusOK)
-    fmt.Fprintf(w, "%v", printer.GetBatteryLevel())
+    if pr, err := provider.GetPrinter(); err != nil {
+      slog.Error("Couldn't connect to printer")
+      w.WriteHeader(http.StatusServiceUnavailable)
+      fmt.Fprintf(w, "printer not connected")
+    } else {
+      level, err := pr.GetBatteryLevel()
+
+      if err == nil {
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprintf(w, "%v", level)
+      } else {
+        w.WriteHeader(http.StatusServiceUnavailable)
+        fmt.Fprintf(w, "printer not connected")
+      }
+    }
   })
 
   port := "8080"
@@ -59,7 +67,7 @@ func main() {
   }
 }
 
-func handlePrint(p printer.Printer, w http.ResponseWriter, r *http.Request) {
+func handlePrint(p printer.PrinterProvider, w http.ResponseWriter, r *http.Request) {
   if r.Method != http.MethodPost {
     http.Error(w, "Only POST method is supported", http.StatusMethodNotAllowed)
     return
@@ -91,7 +99,16 @@ func handlePrint(p printer.Printer, w http.ResponseWriter, r *http.Request) {
 
   packedBitmap := printer.PackBitmap(bitmap)
 
-  p.WriteBitmap(packedBitmap)
-  
-  w.WriteHeader(http.StatusOK)
+  if pr, err := p.GetPrinter(); err != nil {
+    slog.Error("Couldn't connect to printer!", "error", err)
+    w.WriteHeader(http.StatusServiceUnavailable)
+  } else {
+    err = pr.WriteBitmap(packedBitmap)
+
+    if err == nil {
+      w.WriteHeader(http.StatusOK)
+    } else {
+      w.WriteHeader(http.StatusServiceUnavailable)
+    }
+  }
 }
