@@ -4,8 +4,6 @@ import (
   "fmt"
   "gotenburg/model"
   "image"
-  "image/color"
-  "image/rectangle"
 )
 
 type Bitmap interface {
@@ -35,18 +33,9 @@ func (b *PixelBitmap) String() string {
   return fmt.Sprintf("PixelBitmap(%d,%d)", b.width, b.height)
 }
 
-func BitmapFromPaletted(i *image.Paletted) (*PixelBitmap, error) {
-  byteMap := make([]byte, len(i.Palette))
-  for j := 0; j < 2; j++ {
-    if colorGray16, ok := i.Palette[j].(color.Gray16); ok {
-      if colorGray16.Y > 0x8000 {
-        byteMap[j] = 0
-      } else {
-        byteMap[j] = 1
-      }
-    } else {
-      return nil, fmt.Errorf("Color at index %d in palette (%v) is not a Gray16", j, i.Palette[j])
-    }
+func BitmapFromPaletted(i *image.Paletted, colorMap []byte) (*PixelBitmap, error) {
+  if len(colorMap) != len(i.Palette) {
+    return nil, fmt.Errorf("colorMap should be same length as palette")
   }
 
   width, height := i.Bounds().Dx(), i.Bounds().Dy()
@@ -54,7 +43,7 @@ func BitmapFromPaletted(i *image.Paletted) (*PixelBitmap, error) {
   for y := range height {
     row := make([]byte, width)
     for x := range width {
-      row[x] = byteMap[i.ColorIndexAt(x, y)]
+      row[x] = colorMap[i.ColorIndexAt(x, y)]
     }
 
     pixels[y] = row

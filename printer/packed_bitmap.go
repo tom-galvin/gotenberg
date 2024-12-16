@@ -50,7 +50,7 @@ func (b *PackedBitmap) Chunk(start int, height int) *PackedBitmap {
   return &PackedBitmap{
     data: b.data[b.stride * (start):b.stride*(start + height)],
     width: b.width,
-    height: b.height,
+    height: height,
     stride: b.stride,
   }
 }

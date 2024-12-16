@@ -31,41 +31,6 @@ document.getElementById('text').addEventListener('input', (event) => {
   }
 });
 
-var dither = [
-  [0, 1, 0, 1],
-  [2, 3, 2, 3],
-  [0, 1, 0, 1],
-  [2, 3, 2, 3]
-];
-const convertImageToBitmapData = () => {
-  const ctx = canvas.getContext('2d');
-  const imgw = canvas.width, imgh = canvas.height;
-  const imageData = ctx.getImageData(0, 0, imgw, imgh);
-  const pixelArray = imageData.data;
-
-  const data = [];
-  for (let y = 0; y < imgh; y++) {
-    for (let x = 0; x < imgw; x++) {
-      const ditherThreshold = 32 + 64 * dither[y % 4][x % 4];
-      const idx = 4 * (imgw * y + x);
-      data.push(pixelArray[idx] < ditherThreshold ? 1 : 0);
-    }
-  }
-  return {
-    width: imgw,
-    height: imgh,
-    data: btoa((new TextDecoder('utf8')).decode(new Uint8Array(data)))
-  };
-};
-
-const DEVICE_TYPES = {
-  // add more as necessary, this is the only one I ahve
-  PHOMEMO_T02: {
-    MAX_WIDTH_BYTES: 0x30,
-    MAX_BITMAP_HEIGHT: 0xFF
-  }
-};
-
 const fetchBatteryLevel = async () => {
   try {
     // Perform the POST request
@@ -94,16 +59,14 @@ const updateBatteryLevel = async () => {
   document.getElementById("battery-level").innerHTML = await fetchBatteryLevel();
 };
 
-const printImageServer = async () => {
+const printImageServer = async (imageData, imageType) => {
   try {
-    // Perform the POST request
-    const dataToSend = JSON.stringify(convertImageToBitmapData());
     const response = await fetch("/print", {
       method: "POST",
       headers: {
-        "Content-Type": "application/octet-stream",
+        "Content-Type": imageType,
       },
-      body: dataToSend, // Send the Uint8Array as the payload
+      body: imageData
     });
 
     // Ensure the response is OK
@@ -122,10 +85,31 @@ const printImageServer = async () => {
   }
 };
 
+const printCanvas = async () => {
+  const imageType = 'image/png';
+  const dataToSend = await new Promise(resolve => canvas.toBlob(blob => resolve(blob), imageType));
+  await printImageServer(dataToSend, imageType);
+};
+
 document.getElementById("idButton").onclick = async() => {
-  await printImageServer();
+  await printCanvas();
 };
 
 const batteryInterval = setInterval(updateBatteryLevel, 1000);
 
 document.addEventListener("DOMContentLoaded", updateBatteryLevel);
+
+const form = document.getElementById('uploadForm');
+const fileInput = document.getElementById('fileInput');
+
+form.addEventListener('submit', async (event) => {
+  event.preventDefault(); // Prevent the default form submission
+
+  const file = fileInput.files[0];
+  if (!file) {
+    alert('Please select a file');
+    return;
+  }
+
+  await printImageServer(file, file.type);
+});

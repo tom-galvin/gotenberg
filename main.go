@@ -79,7 +79,7 @@ func handlePrint(p printer.PrinterProvider, w http.ResponseWriter, r *http.Reque
   }
   defer r.Body.Close()
 
-  fmt.Printf("Received %d image\n", format)
+  fmt.Printf("Received %s image\n", format)
 
   if err := p.Connect(); err != nil {
     slog.Error("Couldn't connect to printer!", "error", err)
