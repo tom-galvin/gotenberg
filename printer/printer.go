@@ -7,6 +7,7 @@ type Printer interface {
 }
 
 type PrinterProvider interface {
-  GetPrinter() (Printer, error)
+  GetPrinter() Printer
+  Connect() error
   Disconnect() error
 }

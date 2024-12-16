@@ -57,21 +57,23 @@ func (p *BluetoothProvider) Disconnect() error {
   return nil
 }
 
-func (p *BluetoothProvider) GetPrinter() (printer.Printer, error) {
-  if p.printer.IsConnected() {
-    return p.printer, nil
-  } else {
+func (p *BluetoothProvider) Connect() error {
+  if !p.printer.IsConnected() {
     var err error
     if err = p.connect(); err != nil {
       slog.Error("Couldn't connect to bluetooth printer", "error", err)
-      return nil, err
+      return err
     }
     if err = p.printer.initialise(); err != nil {
       slog.Error("Couldn't initialise bluetooth printer after connect", "error", err)
-      return nil, err
+      return err
     }
-    return p.printer, nil
   }
+  return nil
+}
+
+func (p *BluetoothProvider) GetPrinter() printer.Printer {
+  return p.printer
 }
 
 func (p *BluetoothProvider) FindDevice(name string) error {

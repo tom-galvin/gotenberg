@@ -22,13 +22,6 @@ func main() {
     return
   }
 
-  _, err = provider.GetPrinter()
-
-  if err != nil {
-    fmt.Println("Couldn't connect to printer", err)
-    return
-  }
-
   defer provider.Disconnect()
 
   http.Handle("/", http.FileServer(http.Dir("http")))
@@ -42,19 +35,18 @@ func main() {
       http.Error(w, "Only GET method is supported", http.StatusMethodNotAllowed)
       return
     }
-    if pr, err := provider.GetPrinter(); err != nil {
-      slog.Error("Couldn't connect to printer")
+    if !provider.GetPrinter().IsConnected() {
       w.WriteHeader(http.StatusServiceUnavailable)
-      fmt.Fprintf(w, "printer not connected")
+      fmt.Fprintf(w, "Not connected")
     } else {
-      level, err := pr.GetBatteryLevel()
+      level, err := provider.GetPrinter().GetBatteryLevel()
 
       if err == nil {
         w.WriteHeader(http.StatusOK)
         fmt.Fprintf(w, "%v", level)
       } else {
         w.WriteHeader(http.StatusServiceUnavailable)
-        fmt.Fprintf(w, "printer not connected")
+        fmt.Fprintf(w, "Printer disconnected during read")
       }
     }
   })
@@ -99,11 +91,11 @@ func handlePrint(p printer.PrinterProvider, w http.ResponseWriter, r *http.Reque
 
   packedBitmap := printer.PackBitmap(bitmap)
 
-  if pr, err := p.GetPrinter(); err != nil {
+  if err := p.Connect(); err != nil {
     slog.Error("Couldn't connect to printer!", "error", err)
     w.WriteHeader(http.StatusServiceUnavailable)
   } else {
-    err = pr.WriteBitmap(packedBitmap)
+    err = p.GetPrinter().WriteBitmap(packedBitmap)
 
     if err == nil {
       w.WriteHeader(http.StatusOK)
