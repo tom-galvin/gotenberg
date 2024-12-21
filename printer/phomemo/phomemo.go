@@ -22,8 +22,8 @@ func getUUID(t DeviceType) bluetooth.UUID {
 
 type BluetoothProvider struct {
   adapter *bluetooth.Adapter
-  address bluetooth.Address
   printer *BluetoothPrinter
+  address bluetooth.Address
   device bluetooth.Device
 }
 
@@ -36,18 +36,23 @@ func CreateProvider() (*BluetoothProvider, error) {
     return nil, err
   }
 
-  printer := BluetoothPrinter{connected:false}
+  printer := &BluetoothPrinter{connected:false}
 
+  provider := &BluetoothProvider{adapter:adapter, printer:printer}
   adapter.SetConnectHandler(func(d bluetooth.Device, connected bool) {
     if connected {
       slog.Info("Connected!")
     } else {
-      slog.Info("Disconnected!")
-      printer.uninitialise()
+      if d.Address == provider.address && printer.IsConnected() {
+        slog.Info("Disconnected!")
+        printer.uninitialise()
+      } else {
+        slog.Info("Disconnected event fired but printer is not connected or address doesn't match")
+      }
     }
   })
   
-  return &BluetoothProvider{adapter:adapter, printer:&printer}, nil
+  return provider, nil
 }
 
 func (p *BluetoothProvider) Disconnect() error {
