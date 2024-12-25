@@ -23,6 +23,7 @@ type DeviceWriter interface {
 
 func (p *PhomemoPrinter) initialise(w DeviceWriter) error {
   p.ready = make(chan bool)
+  p.printChannel = make(chan printer.PackedBitmap)
   p.connected = true
 
   // start printer event loop
@@ -34,6 +35,7 @@ func (p *PhomemoPrinter) initialise(w DeviceWriter) error {
 func (p *PhomemoPrinter) uninitialise() error {
   p.statusTicker.Stop()
   close(p.ready)
+  close(p.printChannel)
   p.connected = false
 
   return nil
@@ -103,6 +105,7 @@ func hasPrefix(d []byte, b ...byte) bool {
 func (p *PhomemoPrinter) eventLoop(w DeviceWriter) {
   slog.Info("Writer: Waiting for printer to become ready after connect")
 
+  loop:
   for <-p.ready {
     commands := [][]byte{initPrinter()}
 
@@ -123,6 +126,9 @@ func (p *PhomemoPrinter) eventLoop(w DeviceWriter) {
         queryBatteryStatus(),
         queryFirmwareVersion(),
       )
+    default:
+      slog.Info("Writer: disconnected")
+      break loop
     }
 
     for _, command := range commands {
