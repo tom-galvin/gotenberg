@@ -1,6 +1,19 @@
 package model
 
-type PrintingRequest struct {
-  Data []byte
-  Width, Height int
+import (
+  "gotenburg/printer"
+)
+
+type DeviceInfoResponse struct {
+  FirmwareVersion string
+  State string
+  BatteryLevel int
+}
+
+func FromDeviceInfo(i printer.DeviceInfo) DeviceInfoResponse {
+  return DeviceInfoResponse{
+    FirmwareVersion: i.FirmwareVersion,
+    BatteryLevel: i.BatteryLevel,
+    State: i.State.String(),
+  }
 }

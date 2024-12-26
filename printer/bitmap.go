@@ -2,7 +2,6 @@ package printer
 
 import (
   "fmt"
-  "gotenburg/model"
   "image"
 )
 
@@ -51,26 +50,3 @@ func BitmapFromPaletted(i *image.Paletted, colorMap []byte) (*PixelBitmap, error
 
   return &PixelBitmap{pixels, width, height}, nil
 }
-
-func BitmapFromRequest(r *model.PrintingRequest) (*PixelBitmap, error) {
-  pixels := make([][]byte, r.Height)
-  if len(r.Data) != r.Width * r.Height {
-    return nil, fmt.Errorf("Bitmap pixels not consistent with provided width and height (got %v, expecting %v*%v=%v",
-      len(r.Data),
-      r.Width,
-      r.Height,
-      r.Width * r.Height,
-    )
-  }
-
-  for y := range r.Height {
-    pixels[y] = r.Data[y * r.Width:(y + 1) * r.Width]
-  }
-
-  return &PixelBitmap{
-    pixels: pixels,
-    width: r.Width,
-    height: r.Height,
-  }, nil
-}
-

@@ -1,10 +1,11 @@
 package phomemo
 
 import (
-  "log/slog"
+  "bytes"
   "errors"
   "fmt"
   "gotenburg/printer"
+  "log/slog"
   "tinygo.org/x/bluetooth"
 )
 
@@ -23,14 +24,14 @@ func getUUID(t DeviceType) bluetooth.UUID {
 
 type BluetoothProvider struct {
   adapter *bluetooth.Adapter
-  printer *PhomemoPrinter
   writer bluetooth.DeviceCharacteristic
   notifier bluetooth.DeviceCharacteristic
   device bluetooth.Device
   address bluetooth.Address
+  printer PhomemoPrinter
 }
 
-func CreateProvider() (*BluetoothProvider, error) {
+func newBluetoothProvider() (*BluetoothProvider, error) {
   adapter := bluetooth.DefaultAdapter
 
   err := adapter.Enable()
@@ -39,16 +40,14 @@ func CreateProvider() (*BluetoothProvider, error) {
     return nil, err
   }
 
-  printer := &PhomemoPrinter{connected:false}
-
-  provider := &BluetoothProvider{adapter:adapter, printer:printer}
+  provider := &BluetoothProvider{adapter:adapter}
   adapter.SetConnectHandler(func(d bluetooth.Device, connected bool) {
     if connected {
       slog.Info("Connected!")
     } else {
-      if d.Address == provider.address && printer.IsConnected() {
+      if d.Address == provider.address && provider.printer.IsConnected() {
         slog.Info("Disconnected!")
-        printer.uninitialise()
+        provider.printer.uninitialise()
       } else {
         slog.Info("Disconnected event fired but printer is not connected or address doesn't match")
       }
@@ -58,12 +57,19 @@ func CreateProvider() (*BluetoothProvider, error) {
   return provider, nil
 }
 
-func (p *BluetoothProvider) FindDevice(name string) error {
+func FromBluetoothName(name string) (*BluetoothProvider, error) {
+  p, err := newBluetoothProvider()
+
+  if err != nil {
+    slog.Error("Couldn't initialise provider", "error", err)
+    return nil, err
+  }
+
   devices := make(chan bluetooth.ScanResult, 1)
 
   go func() {
     err := p.adapter.Scan(func(adapter *bluetooth.Adapter, result bluetooth.ScanResult) {
-      if result.LocalName() == "T02" {
+      if result.LocalName() == name {
         slog.Info("Found device:",
           "deviceName", result.LocalName(),
         )
@@ -82,11 +88,23 @@ func (p *BluetoothProvider) FindDevice(name string) error {
   dev, ok := <-devices
 
   if !ok {
-    return errors.New("No devices found")
+    return nil, errors.New("No devices found")
   }
 
   p.address = dev.Address
-  return nil
+  return p, nil
+}
+
+func FromBluetoothAddress(address bluetooth.Address) (*BluetoothProvider, error) {
+  p, err := newBluetoothProvider()
+
+  if err != nil {
+    slog.Error("Couldn't initialise provider", "error", err)
+    return nil, err
+  }
+
+  p.address = address
+  return p, nil
 }
 
 func (p *BluetoothProvider) Write(data []byte) error {
@@ -117,31 +135,33 @@ func (p *BluetoothProvider) Connect() error {
       return err
     }
 
-    // initialise controller stuff like channels
-    if err = p.printer.initialise(p); err != nil {
-      slog.Error("Couldn't initialise bluetooth printer after connect", "error", err)
-      return err
-    }
+    c := make(chan bool)
+    p.printer = initialise(p, c)
 
     // enable notifications from device to receive ready notification/battery info etc
-    err = p.notifier.EnableNotifications(func (d []byte) {
-      onBluetoothDataReceived(p.printer, d)
+    err = p.notifier.EnableNotifications(func (data []byte) {
+      handleBluetoothDataFromPrinter(data, &p.printer)
     })
 
     if err != nil {
       slog.Error("Couldn't enable notifications:",
         "error", err,
       )
-
+      p.device.Disconnect()
       return err
     }
-  
+
+    if !<-c {
+      return fmt.Errorf("Printer disconnected before becoming ready")
+    }
+
+    close(c)
   }
   return nil
 }
 
 func (p *BluetoothProvider) GetPrinter() printer.Printer {
-  return p.printer
+  return &p.printer
 }
 
 func (p *BluetoothProvider) connect() error {
@@ -181,12 +201,18 @@ func (p *BluetoothProvider) connect() error {
   return nil
 }
 
-func onBluetoothDataReceived(p *PhomemoPrinter, d []byte) {
+func hasPrefix(d []byte, p ...byte) bool {
+  return len(d) >= len(p) && bytes.Equal(d[:len(p)], p)
+}
+
+func handleBluetoothDataFromPrinter(d []byte, p *PhomemoPrinter) {
   switch {
-  case hasPrefix(d, 0x1a, 0x0f, 0x0c):
+  case hasPrefix(d, 0x02, 0xb6, 0x00):
     p.onReady()
+  case hasPrefix(d, 0x1a, 0x0f, 0x0c):
+    p.onFinished()
   case hasPrefix(d, 0x1a, 0x3b, 0x04):
-    // only happens with later firmware versions
+    // only seen this with later firmware version
     slog.Debug("Printer info:", "info", d[3:])
   case hasPrefix(d, 0x1a, 0x04):
     p.onBatteryLevelChange(int(d[2]))
@@ -196,9 +222,6 @@ func onBluetoothDataReceived(p *PhomemoPrinter, d []byte) {
     p.onPaperStatusChange(d[2] & 1 == 1)
   case hasPrefix(d, 0x01, 0x01):
     slog.Debug("Read command successfully")
-  case hasPrefix(d, 0x02, 0xb6, 0x00):
-    // only happens with later firmware versions
-    p.onReady()
   default:
     slog.Info("Received unknown notification:",
       "data", fmt.Sprintf("%x", d),
