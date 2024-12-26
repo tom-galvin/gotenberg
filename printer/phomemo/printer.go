@@ -2,51 +2,72 @@ package phomemo
 
 import (
   "fmt"
-  "bytes"
   "time"
   "log/slog"
   "image"
+  "sync"
   "gotenburg/printer"
 )
 
 type PhomemoPrinter struct {
-  ready chan bool
-  printChannel chan printer.PackedBitmap
+  connected chan bool
+  finished chan bool
+  writer DeviceWriter
   statusTicker *time.Ticker
-  batteryLevel int
-  connected bool
+  info printer.DeviceInfo
+  printLock sync.Mutex
 }
 
 type DeviceWriter interface {
   Write(data []byte) error
 }
 
-func (p *PhomemoPrinter) initialise(w DeviceWriter) error {
-  p.ready = make(chan bool)
-  p.printChannel = make(chan printer.PackedBitmap)
-  p.connected = true
-
-  // start printer event loop
-  p.statusTicker = time.NewTicker(10 * time.Second)
-  go p.eventLoop(w)
-  return nil
+func initialise(w DeviceWriter, c chan bool) PhomemoPrinter {
+  info := printer.DeviceInfo{
+    State: printer.Connecting,
+  }
+  return PhomemoPrinter{
+    connected: c,
+    finished: make(chan bool),
+    statusTicker: time.NewTicker(10 * time.Second),
+    writer: w,
+    info: info,
+  }
 }
 
 func (p *PhomemoPrinter) uninitialise() error {
   p.statusTicker.Stop()
-  close(p.ready)
-  close(p.printChannel)
-  p.connected = false
+  close(p.finished)
+  p.info.State = printer.Disconnected
 
   return nil
 }
 
 func (p *PhomemoPrinter) IsConnected() bool {
-  return p.connected
+  return p.info.State != printer.Disconnected
 }
 
-func (p *PhomemoPrinter) GetBatteryLevel() (int, error) {
-  return p.batteryLevel, nil
+func (p *PhomemoPrinter) Info() printer.DeviceInfo {
+  return p.info
+}
+
+func (p *PhomemoPrinter) pollStatus() error {
+  if p.info.State != printer.Disconnected && p.info.State != printer.Busy {
+    p.printLock.Lock()
+    defer p.printLock.Unlock()
+    if p.info.State != printer.Disconnected && p.info.State != printer.Busy {
+      slog.Debug("Polling device status")
+      data := initPrinter()
+      data = append(data, queryBatteryStatus()...)
+      data = append(data, queryPaperStatus()...)
+      data = append(data, queryFirmwareVersion()...)
+      return p.writer.Write(data)
+    }
+  }
+
+  // control falls through to this if either of the Ready checks fail
+  // the mutex unlock was also deferred so that'll happen if needed
+  return fmt.Errorf("Printer is not in ready state")
 }
 
 func (p *PhomemoPrinter) WriteImage(i image.Image) error {
@@ -54,96 +75,100 @@ func (p *PhomemoPrinter) WriteImage(i image.Image) error {
     slog.Error("Image couldn't be packed to bitmap", "error", err)
     return err
   } else {
-    return p.writePackedBitmap(pb)
+    slog.Debug("Acquiring lock on printer state")
+    if p.info.State == printer.Ready {
+      p.printLock.Lock()
+      defer p.printLock.Unlock()
+      if p.info.State == printer.Ready {
+        p.info.State = printer.Busy
+
+        if err := p.sendPackedBitmapToPrinter(pb); err != nil {
+          return err
+        }
+
+        // The device sometimes outputs an early "finished printing" signal
+        // right after the bitmap data is written, as well as after printing
+        // is finished.
+        // A small delay is added here before waiting for the signal to 
+        // ignore the initial spurious one.
+        time.Sleep(100 * time.Millisecond)
+        slog.Info("Waiting for printer to finish printing")
+        if !<-p.finished {
+          // TODO: add a timeout so it doesn't block forever if the
+          // printer gets stuck?
+          return fmt.Errorf("Printer didn't finish successfully")
+        }
+
+        slog.Info("Printer finished printing")
+        p.info.State = printer.Ready
+
+        return nil
+      }
+    }
+
+    // Control falls through to this if either of the Ready checks fail.
+    // The mutex unlock was also deferred, so that'll happen now if needed
+    return fmt.Errorf("Printer is not in ready state")
   }
 }
 
-func (p *PhomemoPrinter) writePackedBitmap(b *printer.PackedBitmap) error {
-  if !p.connected {
-    return fmt.Errorf("Printer is not connected")
-  }
-  select {
-  case p.printChannel <- *b:
-    return nil
-  default:
-    return fmt.Errorf("Device disconnected while waiting for print operation")
-  }
+func (p *PhomemoPrinter) sendPackedBitmapToPrinter(b *printer.PackedBitmap) error {
+  data := initPrinter()
+  data = append(data, setJustify(Centre)...)
+  data = append(data, setLaserIntensity(Low)...)
+  splitBitmapIntoCommands(b, &data)
+  data = append(data, feedLines(4)...)
+  return p.writer.Write(data)
 }
 
 func (p *PhomemoPrinter) onReady() {
+  slog.Info("Printer ready for printing")
+
+  if err := p.pollStatus(); err != nil {
+    slog.Error("Couldn't poll status", "error", err)
+  }
+
+  // start consuming ticker to periodically refresh device details
+  go (func() {
+    for range p.statusTicker.C {
+      if err := p.pollStatus(); err != nil {
+        slog.Error("Couldn't poll status", "error", err)
+      }
+    }
+  })()
+}
+
+func (p *PhomemoPrinter) onFinished() {
   select {
-  case p.ready <- true:
-    slog.Info("Printer finished action")
+  case p.finished <- true:
+    // unblocks event loop if we're waiting to finish printing something
   default:
-    slog.Info("Printer wasn't waiting")
+    // otherwise just ignore the signal
   }
 }
 
 func (p *PhomemoPrinter) onBatteryLevelChange(level int) {
-  slog.Debug("Battery level:",
-    "level", level,
-  )
-  p.batteryLevel = level
+  p.info.BatteryLevel = level
 }
 
 func (p *PhomemoPrinter) onPaperStatusChange(loaded bool) {
-  slog.Info("Reader: paper status changed",
-    "loaded", loaded,
-  )
-}
-
-func (p *PhomemoPrinter) onFirmwareVersionReceived(version string) {
-  slog.Info("Reader: ping received",
-    "firmwareVersion", version,
-  )
-}
-
-func hasPrefix(d []byte, b ...byte) bool {
-  return len(d) >= len(b) && bytes.Equal(d[:len(b)], b)
-}
-
-func (p *PhomemoPrinter) eventLoop(w DeviceWriter) {
-  slog.Info("Writer: Waiting for printer to become ready after connect")
-
-  loop:
-  for <-p.ready {
-    commands := [][]byte{initPrinter()}
-
-    select {
-    case bitmapToPrint := <-p.printChannel:
-      slog.Info("Writer: Sending bitmap data to printer")
-      commands = append(commands,
-        setJustify(Centre),
-        setLaserIntensity(Low),
-      )
-      writeBitmapAsCommands(&bitmapToPrint, &commands)
-      commands = append(commands,
-        feedLines(4),
-      )
-    case <-p.statusTicker.C:
-      slog.Info("Writer: Pinging printer status")
-      commands = append(commands,
-        queryBatteryStatus(),
-        queryFirmwareVersion(),
-      )
-    default:
-      slog.Info("Writer: disconnected")
-      break loop
-    }
-
-    for _, command := range commands {
-      if err := w.Write(command); err != nil {
-        slog.Error("Couldn't write command data",
-          "err", err,
-        )
-        break
-      }
-    }
+  oldState := p.info.State
+  if loaded && p.info.State != printer.Busy {
+    p.info.State = printer.Ready
+  } else if !loaded {
+    p.info.State = printer.OutOfPaper
+  }
+  if oldState == printer.Connecting {
+    p.connected <- true
   }
 }
 
+func (p *PhomemoPrinter) onFirmwareVersionReceived(version string) {
+  p.info.FirmwareVersion = version
+}
+
 const maxBitmapHeight = 256
-func writeBitmapAsCommands(b *printer.PackedBitmap, commands *[][]byte) error {
+func splitBitmapIntoCommands(b *printer.PackedBitmap, d *[]byte) error {
   if b.Stride() > 0x30 {
     return fmt.Errorf("Bitmap too wide for printer: %s", b)
   }
@@ -159,9 +184,12 @@ func writeBitmapAsCommands(b *printer.PackedBitmap, commands *[][]byte) error {
     slice := b.Chunk(bitmapStart, bitmapEnd - bitmapStart)
     sliceHeightU16 := uint16(slice.Height())
 
-    *commands = append(*commands,
-      printBitmap(strideU8, sliceHeightU16),
-      slice.Data(),
+    *d = append(*d,
+      printBitmap(strideU8, sliceHeightU16)...,
+    )
+
+    *d = append(*d,
+      slice.Data()...,
     )
   }
 

@@ -6,21 +6,24 @@ import (
   "os"
   "net/http"
   "image"
+  "encoding/json"
   _ "image/png"
   _ "image/jpeg"
+  "gotenburg/model"
   "gotenburg/printer"
   "gotenburg/printer/phomemo"
 )
 
 func main() {
   fmt.Println("Hello, Gotenburg!")
-  provider, err := phomemo.CreateProvider()
+  provider, err := phomemo.FromBluetoothName("T02")
 
-  fmt.Println("Scanning for devices...")
-  if err = provider.FindDevice("T02"); err != nil {
+  if err != nil {
     slog.Error("Couldn't find printer", "err", err)
     return
   }
+
+  provider.Connect()
 
   defer provider.Disconnect()
 
@@ -39,14 +42,16 @@ func main() {
       w.WriteHeader(http.StatusServiceUnavailable)
       fmt.Fprintf(w, "Not connected")
     } else {
-      level, err := provider.GetPrinter().GetBatteryLevel()
+      info := provider.GetPrinter().Info()
 
-      if err == nil {
-        w.WriteHeader(http.StatusOK)
-        fmt.Fprintf(w, "%v", level)
-      } else {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        fmt.Fprintf(w, "Printer disconnected during read")
+      infoData, err := json.Marshal(model.FromDeviceInfo(info))
+      if err != nil {
+        panic("fuck!")
+      }
+
+      w.WriteHeader(http.StatusOK)
+      if _, err = w.Write(infoData); err != nil {
+        slog.Error("Couldn't write HTTP response", "error", err)
       }
     }
   })
