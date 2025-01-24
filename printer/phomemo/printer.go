@@ -7,6 +7,7 @@ import (
   "image"
   "sync"
   "gotenburg/printer"
+  "gotenburg/render"
 )
 
 type PhomemoPrinter struct {
@@ -71,6 +72,55 @@ func (p *PhomemoPrinter) pollStatus() error {
 }
 
 func (p *PhomemoPrinter) WriteImage(i image.Image) error {
+  ig := render.RenderForDevice(i)
+  b, err := printer.FromPaletted(ig)
+  pb := printer.PackBitmap(b)
+
+  if err != nil {
+    slog.Error("Couldn't create packed bitmap from paletted image", "error", err)
+    return err
+  }
+
+  slog.Debug("Acquiring lock on printer state")
+  if p.info.State == printer.Ready {
+    p.printLock.Lock()
+    defer p.printLock.Unlock()
+    if p.info.State == printer.Ready {
+      p.info.State = printer.Busy
+
+      if err := p.sendPackedBitmapToPrinter(pb); err != nil {
+        return err
+      }
+
+      // The device sometimes outputs an early "finished printing" signal
+      // right after the bitmap data is written, as well as the later one
+      // which the device outputs after printing is finished.
+      // A small delay is added here before waiting for the signal to 
+      // ignore the initial spurious one.
+      // This could probably be more elegant, but printing anything takes
+      // at least 1 second anyway, so sleeping for 100ms doesn't introduce
+      // any additional delay to the process.
+      time.Sleep(100 * time.Millisecond)
+      slog.Info("Waiting for printer to finish printing")
+      if !<-p.finished {
+        // TODO: add a timeout so it doesn't block forever and deadlock if the
+        // printer gets stuck?
+        return fmt.Errorf("Printer didn't finish successfully")
+      }
+
+      slog.Info("Printer finished printing")
+      p.info.State = printer.Ready
+
+      return nil
+    }
+  }
+
+  // Control falls through to this if either of the Ready checks fail.
+  // The mutex unlock was also deferred, so that'll happen now if needed
+  return fmt.Errorf("Printer is not in ready state")
+}
+
+func (p *PhomemoPrinter) WriteImageOld(i image.Image) error {
   if pb, err := packImageToPhomemoBitmap(i); err != nil {
     slog.Error("Image couldn't be packed to bitmap", "error", err)
     return err

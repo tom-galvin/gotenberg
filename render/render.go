@@ -1,4 +1,4 @@
-package phomemo
+package render
 
 import (
   "image"
@@ -10,7 +10,7 @@ import (
 
 // take an image, monochrome-ify using dithering, pack it into the Phomemo bitmap format to print
 // image palette will be {black, white} in that order
-func RenderForDevice(i image.Image) image.Image {
+func RenderForDevice(i image.Image) *image.Paletted {
   // TODO: if image less than printer max width, pad with white pixels
   // Phomemo T02 hardware seems to act unpredictably if input bitmap less than device width
 

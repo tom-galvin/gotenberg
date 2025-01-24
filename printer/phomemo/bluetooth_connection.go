@@ -1,3 +1,6 @@
+// This package is built with the assumption that the server will only be
+// connected to a single bluetooth device at a time; this will need to be
+// ripped up if we want to manage e.g. multiple bluetooth devices at once
 package phomemo
 
 import (
