@@ -37,7 +37,7 @@ type Printer interface {
   IsConnected() bool
 }
 
-type PrinterProvider interface {
+type Connection interface {
   GetPrinter() Printer
   Connect() error
   Disconnect() error

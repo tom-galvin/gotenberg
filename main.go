@@ -16,21 +16,21 @@ import (
 
 func main() {
   fmt.Println("Hello, Gotenburg!")
-  provider, err := phomemo.FromBluetoothName("T02")
+  conn, err := phomemo.FromBluetoothName("T02")
 
   if err != nil {
     slog.Error("Couldn't find printer", "err", err)
     return
   }
 
-  provider.Connect()
+  conn.Connect()
 
-  defer provider.Disconnect()
+  defer conn.Disconnect()
 
   http.Handle("/", http.FileServer(http.Dir("http")))
 
   http.HandleFunc("/print", func(w http.ResponseWriter, r *http.Request) {
-    handlePrint(provider, w, r)
+    handlePrint(conn, w, r)
   })
 
   http.HandleFunc("/battery", func(w http.ResponseWriter, r *http.Request) {
@@ -38,11 +38,11 @@ func main() {
       http.Error(w, "Only GET method is supported", http.StatusMethodNotAllowed)
       return
     }
-    if !provider.GetPrinter().IsConnected() {
+    if !conn.GetPrinter().IsConnected() {
       w.WriteHeader(http.StatusServiceUnavailable)
       fmt.Fprintf(w, "Not connected")
     } else {
-      info := provider.GetPrinter().Info()
+      info := conn.GetPrinter().Info()
 
       infoData, err := json.Marshal(model.FromDeviceInfo(info))
       if err != nil {
@@ -64,7 +64,7 @@ func main() {
   }
 }
 
-func handlePrint(p printer.PrinterProvider, w http.ResponseWriter, r *http.Request) {
+func handlePrint(p printer.Connection, w http.ResponseWriter, r *http.Request) {
   if r.Method != http.MethodPost {
     http.Error(w, "Only POST method is supported", http.StatusMethodNotAllowed)
     return

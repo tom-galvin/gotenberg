@@ -87,14 +87,17 @@ func (p *PhomemoPrinter) WriteImage(i image.Image) error {
         }
 
         // The device sometimes outputs an early "finished printing" signal
-        // right after the bitmap data is written, as well as after printing
-        // is finished.
+        // right after the bitmap data is written, as well as the later one
+        // which the device outputs after printing is finished.
         // A small delay is added here before waiting for the signal to 
         // ignore the initial spurious one.
+        // This could probably be more elegant, but printing anything takes
+        // at least 1 second anyway, so sleeping for 100ms doesn't introduce
+        // any additional delay to the process.
         time.Sleep(100 * time.Millisecond)
         slog.Info("Waiting for printer to finish printing")
         if !<-p.finished {
-          // TODO: add a timeout so it doesn't block forever if the
+          // TODO: add a timeout so it doesn't block forever and deadlock if the
           // printer gets stuck?
           return fmt.Errorf("Printer didn't finish successfully")
         }
@@ -141,7 +144,7 @@ func (p *PhomemoPrinter) onReady() {
 func (p *PhomemoPrinter) onFinished() {
   select {
   case p.finished <- true:
-    // unblocks event loop if we're waiting to finish printing something
+    // unblocks WriteImage if we're waiting to finish printing something
   default:
     // otherwise just ignore the signal
   }
@@ -167,7 +170,12 @@ func (p *PhomemoPrinter) onFirmwareVersionReceived(version string) {
   p.info.FirmwareVersion = version
 }
 
+// TODO: to support the other phomemo devices this shouldn't be hardcoded
 const maxBitmapHeight = 256
+
+// writes the bitmap into the provided buffer, splitting the bitmap up into
+// several if the height is greater than the max supported bitmap height for
+// the device
 func splitBitmapIntoCommands(b *printer.PackedBitmap, d *[]byte) error {
   if b.Stride() > 0x30 {
     return fmt.Errorf("Bitmap too wide for printer: %s", b)

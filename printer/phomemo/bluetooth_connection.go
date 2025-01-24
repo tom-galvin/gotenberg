@@ -1,12 +1,13 @@
 package phomemo
 
 import (
-  "bytes"
-  "errors"
-  "fmt"
-  "gotenburg/printer"
-  "log/slog"
-  "tinygo.org/x/bluetooth"
+	"bytes"
+	"errors"
+	"fmt"
+	"gotenburg/printer"
+	"log/slog"
+
+	"tinygo.org/x/bluetooth"
 )
 
 type DeviceType byte
@@ -16,22 +17,22 @@ const (
   Notifier DeviceType = 0x03
 )
 
+type BluetoothConnection struct {
+  device bluetooth.Device
+  adapter *bluetooth.Adapter
+  writer bluetooth.DeviceCharacteristic
+  notifier bluetooth.DeviceCharacteristic
+  printer PhomemoPrinter
+  address bluetooth.Address
+}
+
 func getUUID(t DeviceType) bluetooth.UUID {
   return bluetooth.NewUUID([16]byte{
     0x00, 0x00, 0xff, byte(t), 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0x80, 0x5f, 0x9b, 0x34, 0xfb,
   })
 }
 
-type BluetoothProvider struct {
-  adapter *bluetooth.Adapter
-  writer bluetooth.DeviceCharacteristic
-  notifier bluetooth.DeviceCharacteristic
-  device bluetooth.Device
-  address bluetooth.Address
-  printer PhomemoPrinter
-}
-
-func newBluetoothProvider() (*BluetoothProvider, error) {
+func newBluetoothConnection() (*BluetoothConnection, error) {
   adapter := bluetooth.DefaultAdapter
 
   err := adapter.Enable()
@@ -40,28 +41,28 @@ func newBluetoothProvider() (*BluetoothProvider, error) {
     return nil, err
   }
 
-  provider := &BluetoothProvider{adapter:adapter}
+  conn := &BluetoothConnection{adapter:adapter}
   adapter.SetConnectHandler(func(d bluetooth.Device, connected bool) {
     if connected {
       slog.Info("Connected!")
     } else {
-      if d.Address == provider.address && provider.printer.IsConnected() {
+      if d.Address == conn.address && conn.printer.IsConnected() {
         slog.Info("Disconnected!")
-        provider.printer.uninitialise()
+        conn.printer.uninitialise()
       } else {
         slog.Info("Disconnected event fired but printer is not connected or address doesn't match")
       }
     }
   })
 
-  return provider, nil
+  return conn, nil
 }
 
-func FromBluetoothName(name string) (*BluetoothProvider, error) {
-  p, err := newBluetoothProvider()
+func FromBluetoothName(name string) (*BluetoothConnection, error) {
+  p, err := newBluetoothConnection()
 
   if err != nil {
-    slog.Error("Couldn't initialise provider", "error", err)
+    slog.Error("Couldn't initialise conn", "error", err)
     return nil, err
   }
 
@@ -95,11 +96,11 @@ func FromBluetoothName(name string) (*BluetoothProvider, error) {
   return p, nil
 }
 
-func FromBluetoothAddress(address bluetooth.Address) (*BluetoothProvider, error) {
-  p, err := newBluetoothProvider()
+func FromBluetoothAddress(address bluetooth.Address) (*BluetoothConnection, error) {
+  p, err := newBluetoothConnection()
 
   if err != nil {
-    slog.Error("Couldn't initialise provider", "error", err)
+    slog.Error("Couldn't initialise connection", "error", err)
     return nil, err
   }
 
@@ -107,7 +108,7 @@ func FromBluetoothAddress(address bluetooth.Address) (*BluetoothProvider, error)
   return p, nil
 }
 
-func (p *BluetoothProvider) Write(data []byte) error {
+func (p *BluetoothConnection) Write(data []byte) error {
   _, err := p.writer.WriteWithoutResponse(data)
 
   if err != nil {
@@ -119,14 +120,14 @@ func (p *BluetoothProvider) Write(data []byte) error {
   return err
 }
 
-func (p *BluetoothProvider) Disconnect() error {
+func (p *BluetoothConnection) Disconnect() error {
   if p.printer.IsConnected() {
     p.device.Disconnect()
   }
   return nil
 }
 
-func (p *BluetoothProvider) Connect() error {
+func (p *BluetoothConnection) Connect() error {
   if !p.printer.IsConnected() {
     var err error
     // connect to bluetooth device & get characteristics
@@ -160,11 +161,11 @@ func (p *BluetoothProvider) Connect() error {
   return nil
 }
 
-func (p *BluetoothProvider) GetPrinter() printer.Printer {
+func (p *BluetoothConnection) GetPrinter() printer.Printer {
   return &p.printer
 }
 
-func (p *BluetoothProvider) connect() error {
+func (p *BluetoothConnection) connect() error {
   slog.Debug("Connecting to device...")
   device, err := p.adapter.Connect(p.address, bluetooth.ConnectionParams{})
   if err != nil {
