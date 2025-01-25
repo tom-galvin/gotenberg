@@ -1,7 +1,7 @@
 // This file implements methods to pack bitmap pixel data into
-// the bit structure accepted by Phomemo printers
+// the bit structure accepted by Phomemo printers.
 
-package printer
+package bitmap
 
 import "fmt"
 

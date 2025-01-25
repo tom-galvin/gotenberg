@@ -1,6 +1,6 @@
 // This file implements the various Epson ESC/POS command byte sequences that can be
 // written to Phomemo T02/M02/T02S printers.
-package phomemo
+package printer
 
 // Control characters
 const (
