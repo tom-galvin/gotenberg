@@ -2,6 +2,10 @@
 // written to Phomemo T02/M02/T02S printers.
 package printer
 
+import (
+  "gotenburg/bitmap"
+)
+
 // Control characters
 const (
   Esc = 0x1B
@@ -45,12 +49,43 @@ func setLaserIntensity(intensity LaserIntensity) []byte {
 // widthBytes specifies the width of the bitmap data in bytes, with 8 pixels packed into 1 byte.
 // heightBits specifies the height of the bitmap data in rows.
 // After this command is written, (widthBytes * heightBits) bytes of data must then be written
-func printBitmap(widthBytes byte, heightBits uint16) []byte {
+func printBitmapHeader(widthBytes byte, heightBits uint16) []byte {
   return []byte{
     GS, 0x76, 0x30, 0x00,
     widthBytes, 0x00,
     byte(heightBits & 0xFF), byte(heightBits >> 8),
   }
+}
+
+const maxBitmapHeight = 256
+// Returns one or more commands and bitmap data blocks which will print the
+// provided bitmap to a phomemo printer, splitting the bitmap up vertically
+// if the bitmap height is greater than the max supported individual bitmap
+// height
+func printBitmap(b *bitmap.PackedBitmap) []byte {
+  d := []byte{}
+  strideU8 := byte(b.Stride())
+
+  for bitmapStart := 0; bitmapStart < b.Height(); bitmapStart += maxBitmapHeight {
+    bitmapEnd := bitmapStart + maxBitmapHeight
+
+    if bitmapEnd >= b.Height() {
+      bitmapEnd = b.Height()
+    }
+
+    slice := b.Chunk(bitmapStart, bitmapEnd - bitmapStart)
+    sliceHeightU16 := uint16(slice.Height())
+
+    d = append(d,
+      printBitmapHeader(strideU8, sliceHeightU16)...,
+    )
+
+    d = append(d,
+      slice.Data()...,
+    )
+  }
+
+  return d
 }
 
 // Makes the printer spool through a number of blank lines.
@@ -59,31 +94,26 @@ func feedLines(n byte) []byte {
 }
 
 // Queries the amount of time remaining before the printer automatically powers off.
-// TODO: output format
 func queryDeviceTimer() []byte {
   return []byte{US, 0x11, 0x0E}
 }
 
 // Queries the battery status of the printer.
-// TODO: output format
 func queryBatteryStatus() []byte {
   return []byte{US, 0x11, 0x08}
 }
 
 // Queries the status of the paper loaded & whether the top lid is open or not.
-// TODO: output format
 func queryPaperStatus() []byte {
   return []byte{US, 0x11, 0x11}
 }
 
 // Queries the version of the firmware running on the device.
-// TODO: output format
 func queryFirmwareVersion() []byte {
   return []byte{US, 0x11, 0x07}
 }
 
 // Queries the serial number of the device.
-// TODO: output format
 func queryDeviceSerial() []byte {
   return []byte{US, 0x11, 0x09}
 }

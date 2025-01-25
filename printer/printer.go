@@ -130,7 +130,7 @@ func (p *PhomemoPrinter) sendPackedBitmapToPrinter(b *bitmap.PackedBitmap) error
   data := initPrinter()
   data = append(data, setJustify(Centre)...)
   data = append(data, setLaserIntensity(Low)...)
-  splitBitmapIntoCommands(b, &data)
+  data = append(data, printBitmap(b)...)
   data = append(data, feedLines(4)...)
   return p.writer.Write(data)
 }
@@ -179,39 +179,4 @@ func (p *PhomemoPrinter) onPaperStatusChange(loaded bool) {
 
 func (p *PhomemoPrinter) onFirmwareVersionReceived(version string) {
   p.info.FirmwareVersion = version
-}
-
-// TODO: to support the other phomemo devices this shouldn't be hardcoded
-const maxBitmapHeight = 256
-
-// writes one or more commands to the provided buffer which will print the
-// provided bitmap to a phomemo printer, splitting the bitmap up vertically
-// if the bitmap height is greater than the max supported individual bitmap
-// height
-func splitBitmapIntoCommands(b *bitmap.PackedBitmap, d *[]byte) error {
-  if b.Stride() > 0x30 {
-    return fmt.Errorf("Bitmap too wide for printer: %s", b)
-  }
-  strideU8 := byte(b.Stride())
-
-  for bitmapStart := 0; bitmapStart < b.Height(); bitmapStart += maxBitmapHeight {
-    bitmapEnd := bitmapStart + maxBitmapHeight
-
-    if bitmapEnd >= b.Height() {
-      bitmapEnd = b.Height()
-    }
-
-    slice := b.Chunk(bitmapStart, bitmapEnd - bitmapStart)
-    sliceHeightU16 := uint16(slice.Height())
-
-    *d = append(*d,
-      printBitmap(strideU8, sliceHeightU16)...,
-    )
-
-    *d = append(*d,
-      slice.Data()...,
-    )
-  }
-
-  return nil
 }

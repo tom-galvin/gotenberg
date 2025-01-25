@@ -32,13 +32,19 @@ func (b *PackedBitmap) Data() []byte {
 func (b *PackedBitmap) GetBit(x int, y int) byte {
   bitIndex := x % bitsPerWord
   wordStartX := x - bitIndex
-  bitsInThisWord := b.width - wordStartX
-  if bitsInThisWord > 8 {
-    bitsInThisWord = 8
+
+  // If the image width is not a multiple of 8, then the final byte of a
+  // horizonal line in the image will represent less than 8 pixels.
+  // The pixels are "left-aligned" to the byte; this means the least significant
+  // bit won't be the rightmost pixel, so we need to take that into account
+  // when bitshifting.
+  pixelsInThisWord := b.width - wordStartX
+  if pixelsInThisWord > 8 {
+    pixelsInThisWord = 8
   }
 
   index := (y * b.stride) + (x / bitsPerWord)
-  return (b.data[index] >> (bitsInThisWord - 1 - bitIndex)) & 1
+  return (b.data[index] >> (pixelsInThisWord - 1 - bitIndex)) & 1
 }
 
 func (b *PackedBitmap) String() string {
@@ -55,7 +61,7 @@ func (b *PackedBitmap) Chunk(start int, height int) *PackedBitmap {
   }
 }
 
-// Maps data from the generic bitmap structure and packs it into the Phomemo bitmap structure
+// Take data from any Bitmap implementation and pack it into the Phomemo bitmap structure
 func PackBitmap(b Bitmap) *PackedBitmap {
   width, height, stride := b.Width(), b.Height(), (b.Width() + bitsPerWord - 1) / bitsPerWord
   data := make([]byte, stride * height)
