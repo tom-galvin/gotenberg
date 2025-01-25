@@ -11,12 +11,12 @@ import (
   _ "image/jpeg"
   "gotenburg/model"
   "gotenburg/printer"
-  "gotenburg/printer/phomemo"
 )
 
 func main() {
   fmt.Println("Hello, Gotenburg!")
-  conn, err := phomemo.FromBluetoothName("T02")
+  DbConnect()
+  conn, err := printer.FromBluetoothName("T02")
 
   if err != nil {
     slog.Error("Couldn't find printer", "err", err)
