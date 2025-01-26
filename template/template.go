@@ -1,35 +1,35 @@
 package template
 
 import (
-  "time"
+	"time"
 )
 
 type Template struct {
-  id int
-  name string
-  createdAt time.Time
-  landscape bool
-  parameters []Parameter
-  images []Image
-  texts []Text
+	Id         int
+	Name       string
+	CreatedAt  time.Time
+	Landscape  bool
+	Parameters []Parameter
+	Images     []Image
+	Texts      []Text
 }
 
 type Parameter struct {
-  id int
-  name string
-  maxLength int
+	Id        int
+	Name      string
+	MaxLength int
 }
 
 type Image struct {
-  id int
-  image []byte
-  x, y int
-  width, height int
+	Id            int
+	Image         []byte
+	X, Y          int
+	Width, Height int
 }
 
 type Text struct {
-  id int
-  text string
-  x, y int
-  width, height int
+	Id            int
+	Text          string
+	X, Y          int
+	Width, Height int
 }
