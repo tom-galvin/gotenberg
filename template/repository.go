@@ -210,7 +210,7 @@ func (r *TemplateRepository) insertChildren(tx *sql.Tx, t *Template) error {
 	}
 	defer tStmt.Close()
 	for i, txt := range t.Texts {
-		_, err := iStmt.Exec(t.Id,
+		_, err := tStmt.Exec(t.Id,
 			txt.Text,
 			txt.X, txt.Y,
 			sql.NullInt32{Int32: int32(txt.Width), Valid: txt.Width > 0},

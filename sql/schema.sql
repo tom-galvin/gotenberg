@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS template_image(
   image BLOB NOT NULL,
   x INT NOT NULL,
   y INT NOT NULL,
-  width INT,
-  height INT,
+  width INT NOT NULL,
+  height INT NOT NULL,
   FOREIGN KEY (template_id) REFERENCES template(id)
 );
 
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS template_text(
   text TEXT NOT NULL,
   x INT NOT NULL,
   y INT NOT NULL,
-  width INT,
+  width INT NOT NULL,
   height INT,
   FOREIGN KEY (template_id) REFERENCES template(id)
 );

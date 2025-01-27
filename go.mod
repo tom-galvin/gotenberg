@@ -7,6 +7,7 @@ require tinygo.org/x/bluetooth v0.10.0
 require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/makeworld-the-better-one/dither/v2 v2.4.0 // indirect
 	github.com/ncruces/go-sqlite3 v0.22.0 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
@@ -20,4 +21,5 @@ require (
 	golang.org/x/exp v0.0.0-20230728194245-b0cb94b80691 // indirect
 	golang.org/x/image v0.23.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )
