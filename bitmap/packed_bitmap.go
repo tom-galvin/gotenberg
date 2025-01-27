@@ -52,7 +52,7 @@ func (b *PackedBitmap) String() string {
 }
 
 // Takes a horizontal slice of the packed bitmap, with the specified height and the start X co-ordinate of the slice from the source bitmap
-func (b *PackedBitmap) Chunk(start int, height int) *PackedBitmap {
+func (b *PackedBitmap) VerticalSlice(start int, height int) *PackedBitmap {
   return &PackedBitmap{
     data: b.data[b.stride * (start):b.stride*(start + height)],
     width: b.width,
@@ -69,12 +69,12 @@ func PackBitmap(b Bitmap) *PackedBitmap {
   var p byte = 0
   for y := range height {
     for x := range width {
+      // pack each bit in the bitmap into a word, one by one
       p = (p << 1) | (b.GetBit(x, y) & 1)
 
-      // FIXME: I don't think this is accurate if the bitmap width
-      // isn't a multiple of 8 as the final bits don't get shifted
-      // along to the most significant bits
       if x == width - 1 || x % bitsPerWord == bitsPerWord - 1 {
+        // put the constructed word into the payload once we reach a
+        // word boundary (or the rightmost pixel) 
         index := y * stride + (x / bitsPerWord)
         data[index] = p
         p = 0

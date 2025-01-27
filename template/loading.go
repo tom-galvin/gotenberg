@@ -16,33 +16,33 @@ import (
 func loadImagesForTemplate(t *Template) error {
   for i := 0; i < len(t.Images); i++ {
     reader := bytes.NewReader(t.Images[i].Image)
-    loaded, _, err := image.Decode(reader)
+    loadedImage, _, err := image.Decode(reader)
     if err != nil {
       return fmt.Errorf("Couldn't load image for template image at index %v:\n%w", i, err)
     }
-    t.Images[i].LoadedImage = loaded
+    t.Images[i].LoadedImage = loadedImage
   }
   return nil
 }
 
 func loadFontsForTemplate(t *Template) error {
   for i := 0; i < len(t.Texts); i++ {
-    face, err := loadDefaultFont()
+    loadedFontFace, err := loadDefaultFont()
     if err != nil {
       return fmt.Errorf("Couldn't load font for template text at index %v:\n%w", i, err)
     }
-    t.Texts[i].FontFace = face
+    t.Texts[i].FontFace = loadedFontFace
   }
   return nil
 }
 
 func loadDefaultFont() (font.Face, error) {
-  fontParsed, err := opentype.Parse(gomono.TTF)
+  parsedFont, err := opentype.Parse(gomono.TTF)
 	if err != nil {
     return nil, fmt.Errorf("Couldn't parse font:\n%w", err)
 	}
   
-  face, err := opentype.NewFace(fontParsed, &opentype.FaceOptions{
+  fontFace, err := opentype.NewFace(parsedFont, &opentype.FaceOptions{
     Size: 24,
     DPI: 72,
     Hinting: font.HintingFull,
@@ -51,5 +51,5 @@ func loadDefaultFont() (font.Face, error) {
     return nil, fmt.Errorf("Couldn't create font face:\n%w", err)
   }
 
-	return face, nil
+	return fontFace, nil
 }

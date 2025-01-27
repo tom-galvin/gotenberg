@@ -60,16 +60,16 @@ func RenderForDevice(i image.Image) *image.Paletted {
   if newWidth > maxWidth {
     newWidth = maxWidth
   }
-  b := image.Rect(0, 0, newWidth, i.Bounds().Dy() * newWidth / i.Bounds().Dx())
-  scaled := image.NewRGBA(b)
+  scaledBounds := image.Rect(0, 0, newWidth, i.Bounds().Dy() * newWidth / i.Bounds().Dx())
+  scaledImage := image.NewRGBA(scaledBounds)
   // resize image using Catmull Rom scaling
-  draw.CatmullRom.Scale(scaled, b, i, i.Bounds(), draw.Over, nil)
+  draw.CatmullRom.Scale(scaledImage, scaledBounds, i, i.Bounds(), draw.Over, nil)
 
   // turn full colour image into monochrome pixel by pixel
-  monochromed := image.NewGray16(b)
-  for y := b.Min.Y; y < b.Max.Y; y++ {
-    for x := b.Min.X; x < b.Max.X; x++ {
-      originalColor := scaled.At(x, y)
+  monochromeImage := image.NewGray16(scaledBounds)
+  for y := scaledBounds.Min.Y; y < scaledBounds.Max.Y; y++ {
+    for x := scaledBounds.Min.X; x < scaledBounds.Max.X; x++ {
+      originalColor := scaledImage.At(x, y)
       grayColor := color.Gray16Model.Convert(originalColor).(color.Gray16)
       grayValue := float64(grayColor.Y) / float64(0xFFFF)
 
@@ -77,7 +77,7 @@ func RenderForDevice(i image.Image) *image.Paletted {
       // no logic used to pick 0.5 as gamma factor, just looks empirically close to image on display
       scaledGrayValue := math.Pow(grayValue, 0.5)
       scaledGrayColor := color.Gray16{Y:uint16(scaledGrayValue * float64(0xFFFF))}
-      monochromed.Set(x, y, scaledGrayColor)
+      monochromeImage.Set(x, y, scaledGrayColor)
     }
   }
   
@@ -86,7 +86,7 @@ func RenderForDevice(i image.Image) *image.Paletted {
   ditherer :=  dither.NewDitherer(palette)
   ditherer.Matrix = dither.FloydSteinberg
   ditherer.Serpentine = true
-  dithered := ditherer.DitherPaletted(monochromed)
+  ditheredImage := ditherer.DitherPaletted(monochromeImage)
 
-  return dithered
+  return ditheredImage
 }

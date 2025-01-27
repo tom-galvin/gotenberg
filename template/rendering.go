@@ -48,7 +48,7 @@ func wrapText(text string, maxWidth int, face font.Face) []string {
 	return lines
 }
 
-func measureAndDrawText(text *Text, i *image.RGBA64) Measure {
+func measureAndDrawChildText(text *Text, i *image.RGBA64) Measure {
 	wrappedText := wrapText(text.FilledText, text.Width, text.FontFace)
 	var width, height int
 	for _, line := range wrappedText {
@@ -90,8 +90,7 @@ func measureAndDrawText(text *Text, i *image.RGBA64) Measure {
 	return m
 }
 
-
-func measureAndDrawImage(img *Image, i *image.RGBA64) Measure {
+func measureAndDrawChildImage(img *Image, i *image.RGBA64) Measure {
 	m := Measure{
 		X:      img.X,
 		Y:      img.Y,
@@ -104,3 +103,55 @@ func measureAndDrawImage(img *Image, i *image.RGBA64) Measure {
   }
   return m
 }
+
+// Measure the elements to be drawn for the template and determine the boundaries
+// of the image. If the elements exceed the template bounds then return an error
+func measureAndCheckBounds(t *Template) (int, int, error) {
+  var width, height int
+  if t.Landscape {
+    width = t.MinSize
+    height = deviceWidth
+  } else {
+    width = deviceWidth
+    height = t.MinSize
+  }
+  for _, img := range t.Images {
+    bounds := measureAndDrawChildImage(&img, nil)
+    if bounds.X + bounds.Width > width {
+      width = bounds.X + bounds.Width
+    }
+    if bounds.Y + bounds.Height > height {
+      height = bounds.Y + bounds.Height
+    }
+  }
+  for _, txt := range t.Texts {
+    bounds := measureAndDrawChildText(&txt, nil)
+    if bounds.OutOfBounds {
+      return 0, 0, fmt.Errorf("Text out of bounds")
+    }
+    if bounds.X + bounds.Width > width {
+      width = bounds.X + bounds.Width
+    }
+    if bounds.Y + bounds.Height > height {
+      height = bounds.Y + bounds.Height
+    }
+  }
+  if t.Landscape {
+    if width > t.MaxSize && t.MaxSize > 0 {
+      return 0, 0, fmt.Errorf("Out of width bounds")
+    }
+    if height > deviceWidth {
+      return 0, 0, fmt.Errorf("Out of height bounds")
+    }
+  } else {
+    if width > deviceWidth {
+      return 0, 0, fmt.Errorf("Out of width bounds")
+    }
+    if height > t.MaxSize && t.MaxSize > 0 {
+      return 0, 0, fmt.Errorf("Out of height bounds")
+    }
+  }
+
+  return width, height, nil
+}
+

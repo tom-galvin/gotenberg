@@ -48,69 +48,32 @@ type Text struct {
 const deviceWidth = 48 * 8
 func RenderTemplate(t *Template, params map[string]string) (image.Image, error) {
   if err := loadFontsForTemplate(t); err != nil {
-    return nil, err
+    return nil, fmt.Errorf("Couldn't load fonts for template:\n%w", err)
   }
   if err := loadImagesForTemplate(t); err != nil {
-    return nil, err
+    return nil, fmt.Errorf("Couldn't load images for template:\n%w", err)
   }
-  if err := insertParamsIntoTemplate(t, params); err != nil {
-    return nil, err
+  if err := insertParamsIntoTemplateChildText(t, params); err != nil {
+    return nil, fmt.Errorf("Couldn't insert params into template:\n%w", err)
   }
+
   var width, height int
-  if t.Landscape {
-    width = t.MinSize
-    height = deviceWidth
-  } else {
-    width = deviceWidth
-    height = t.MinSize
-  }
-  for _, img := range t.Images {
-    bounds := measureAndDrawImage(&img, nil)
-    if bounds.X + bounds.Width > width {
-      width = bounds.X + bounds.Width
-    }
-    if bounds.Y + bounds.Height > height {
-      height = bounds.Y + bounds.Height
-    }
-  }
-  for _, txt := range t.Texts {
-    bounds := measureAndDrawText(&txt, nil)
-    if bounds.OutOfBounds {
-      return nil, fmt.Errorf("Text out of bounds")
-    }
-    if bounds.X + bounds.Width > width {
-      width = bounds.X + bounds.Width
-    }
-    if bounds.Y + bounds.Height > height {
-      height = bounds.Y + bounds.Height
-    }
-  }
-  if t.Landscape {
-    if width > t.MaxSize && t.MaxSize > 0 {
-      return nil, fmt.Errorf("Out of width bounds")
-    }
-    if height > deviceWidth {
-      return nil, fmt.Errorf("Out of height bounds")
-    }
-  } else {
-    if width > deviceWidth {
-      return nil, fmt.Errorf("Out of width bounds")
-    }
-    if height > t.MaxSize && t.MaxSize > 0 {
-      return nil, fmt.Errorf("Out of height bounds")
-    }
+  var err error
+  if width, height, err = measureAndCheckBounds(t); err != nil {
+    return nil, fmt.Errorf("Template children failed boundary check:\n%w", err)
   }
 
   bounds := image.Rect(0, 0, width, height)
   img := image.NewRGBA64(bounds)
-  white := color.RGBA{255, 255, 255, 255} // Define white color
-	draw.Draw(img, img.Bounds(), &image.Uniform{C: white}, image.Point{}, draw.Src)
-  for _, templateImg := range t.Images {
-    measureAndDrawImage(&templateImg, img)
+  imgBackgroundColor := color.RGBA{255, 255, 255, 255}
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: imgBackgroundColor}, image.Point{}, draw.Src)
+
+  for _, childImage := range t.Images {
+    measureAndDrawChildImage(&childImage, img)
   }
 
-  for _, templateTxt := range t.Texts {
-    measureAndDrawText(&templateTxt, img)
+  for _, childText := range t.Texts {
+    measureAndDrawChildText(&childText, img)
   }
 
   if t.Landscape {
@@ -136,7 +99,7 @@ func rotate90(img image.Image) image.Image {
 	return newImg
 }
 
-func insertParamsIntoTemplate(t *Template, params map[string]string) error {
+func insertParamsIntoTemplateChildText(t *Template, params map[string]string) error {
   for _, tp := range t.Parameters {
     if _, exists := params[tp.Name]; !exists {
       return fmt.Errorf("No value for parameter %v", tp.Name)
