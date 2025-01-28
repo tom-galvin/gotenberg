@@ -49,85 +49,68 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
     return nil, fmt.Errorf("Failed to query template child count:\n%w", err)
   }
 
-  // select parameters
-  paramRows, err := r.Db.Query(`
+  t.Parameters = make([]Parameter, paramCount)
+  if err := QueryAndScanRows(r.Db, `
     SELECT id, name, max_length
     FROM template_parameter
-    WHERE template_id = ?`, id)
-  if err != nil {
-    return nil, fmt.Errorf("Failed to query template parameters:\n%w", err)
+    WHERE template_id = ?`, id, t.Parameters, func(r *sql.Rows, x *Parameter) error {
+      return r.Scan(&x.Id, &x.Name, &x.MaxLength)
+    },
+  ); err != nil {
+    return nil, fmt.Errorf("Failed to read parameters for template:\n%w", err)
   }
-  defer paramRows.Close()
-
-  t.Parameters = make([]Parameter, paramCount)
-  for n := 0; paramRows.Next(); n++ {
-    param := &t.Parameters[n]
-    var maxLengthNullable sql.NullInt32
-    if err := paramRows.Scan(&param.Id, &param.Name, &maxLengthNullable); err != nil {
-      return nil, fmt.Errorf("Failed to scan template parameter:\n%w", err)
-    }
-    if maxLengthNullable.Valid {
-      param.MaxLength = int(maxLengthNullable.Int32)
-    } else {
-      param.MaxLength = 0
-    }
-  }
-
-  if err = paramRows.Err(); err != nil {
-    return nil, fmt.Errorf("Failed to read template parameters:\n%w", err)
-  }
-
-  // select images
-  imageRows, err := r.Db.Query(`
-    SELECT id, image, x, y, width, height
-    FROM template_image
-    WHERE template_id = ?`, id)
-  if err != nil {
-    return nil, fmt.Errorf("Failed to query template images:\n%w", err)
-  }
-  defer imageRows.Close()
 
   t.Images = make([]Image, imageCount)
-  for n := 0; imageRows.Next(); n++ {
-    image := &t.Images[n]
-    if err := imageRows.Scan(&image.Id, &image.Image, &image.X, &image.Y, &image.Width, &image.Height); err != nil {
-      return nil, fmt.Errorf("Failed to scan template image:\n%w", err)
-    }
+  if err := QueryAndScanRows(r.Db, `
+    SELECT id, image, x, y, width, height
+    FROM template_image
+    WHERE template_id = ?`, id, t.Images, func(r *sql.Rows, i *Image) error {
+      return r.Scan(&i.Id, &i.Image, &i.X, &i.Y, &i.Width, &i.Height)
+    },
+  ); err != nil {
+    return nil, fmt.Errorf("Failed to read child images for template:\n%w", err)
   }
-
-  if err = imageRows.Err(); err != nil {
-    return nil, fmt.Errorf("Failed to read template images:\n%w", err)
-  }
-
-  // select texts
-  textRows, err := r.Db.Query(`
-    SELECT id, text, x, y, width, height
-    FROM template_text
-    WHERE template_id = ?`, id)
-  if err != nil {
-    return nil, fmt.Errorf("Failed to query template texts:\n%w", err)
-  }
-  defer textRows.Close()
 
   t.Texts = make([]Text, textCount)
-  for n := 0; textRows.Next(); n++ {
-    text := &t.Texts[n]
-    var heightNullable sql.NullInt32
-    if err := textRows.Scan(&text.Id, &text.Text, &text.X, &text.Y, &text.Width, &heightNullable); err != nil {
-      return nil, fmt.Errorf("Failed to scan template text:\n%w", err)
-    }
-    if heightNullable.Valid {
-      text.Height = int(heightNullable.Int32)
-    } else {
-      text.Height = 0
-    }
-  }
-
-  if err = textRows.Err(); err != nil {
-    return nil, fmt.Errorf("Failed to read template texts:\n%w", err)
+  if err := QueryAndScanRows(r.Db, `
+    SELECT id, text, x, y, width, height
+    FROM template_text
+    WHERE template_id = ?`, id, t.Texts, func(r *sql.Rows, i *Text) error {
+      return r.Scan(&i.Id, &i.Text, &i.X, &i.Y, &i.Width, &i.Height)
+    },
+  ); err != nil {
+    return nil, fmt.Errorf("Failed to read child texts for image::\n%w", err)
   }
 
   return t, nil
+}
+
+func QueryAndScanRows[T any](db *sql.DB, query string, id int, results []T, scanRow func(*sql.Rows, *T) error) error {
+	rows, err := db.Query(query, id)
+	if err != nil {
+		return fmt.Errorf("Query execution failed:\n%w", err)
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		if count >= len(results) {
+      // shouldn't happen!
+      panic("preallocated slice size is smaller than the number of rows returned")
+		}
+
+		// Scan the row into the current element
+		if err := scanRow(rows, &results[count]); err != nil {
+			return fmt.Errorf("row scanning failed:\n%w", err)
+		}
+		count++
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("Error iterating rows:\n%w", err)
+	}
+
+	return nil
 }
 
 // Run operations in a transaction, committing afterward, or rolling back if the
@@ -203,7 +186,7 @@ func (r *TemplateRepository) insertChildren(tx *sql.Tx, t *Template) error {
   }
   defer pStmt.Close()
   for i, p := range t.Parameters {
-    _, err := pStmt.Exec(t.Id, p.Name, sql.NullInt32{Int32: int32(p.MaxLength), Valid: p.MaxLength > 0})
+    _, err := pStmt.Exec(t.Id, p.Name, p.MaxLength)
     if err != nil {
       return fmt.Errorf("Failed to insert parameter %v of template:\n%w", i, err)
     }
@@ -240,7 +223,7 @@ func (r *TemplateRepository) insertChildren(tx *sql.Tx, t *Template) error {
       txt.Text,
       txt.X, txt.Y,
       txt.Width,
-      sql.NullInt32{Int32: int32(txt.Height), Valid: txt.Height > 0},
+      txt.Height,
     )
     if err != nil {
       return fmt.Errorf("Failed to insert parameter %v of text:\n%w", i, err)
