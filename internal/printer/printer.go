@@ -9,7 +9,7 @@ import (
   "log/slog"
   "image"
   "sync"
-  "gotenburg/bitmap"
+  "tomgalvin.uk/phogoprint/internal/bitmap"
 )
 
 type PhomemoPrinter struct {

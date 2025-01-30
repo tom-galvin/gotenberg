@@ -3,7 +3,7 @@
 package printer
 
 import (
-  "gotenburg/bitmap"
+  "tomgalvin.uk/phogoprint/internal/bitmap"
 )
 
 // Control characters
@@ -73,7 +73,7 @@ func printBitmap(b *bitmap.PackedBitmap) []byte {
       bitmapEnd = b.Height()
     }
 
-    slice := b.Chunk(bitmapStart, bitmapEnd - bitmapStart)
+    slice := b.VerticalSlice(bitmapStart, bitmapEnd - bitmapStart)
     sliceHeightU16 := uint16(slice.Height())
 
     d = append(d,

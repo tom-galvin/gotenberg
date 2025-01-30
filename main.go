@@ -1,23 +1,62 @@
 package main
 
 import (
-  "fmt"
-  "log/slog"
-  "os"
-  "net/http"
-  "image"
+  _ "embed"
   "encoding/json"
-  _ "image/png"
+  "fmt"
+  "image"
   _ "image/jpeg"
-  "gotenburg/model"
-  "gotenburg/printer"
+  "log/slog"
+  "net/http"
+  "os"
+
+  "tomgalvin.uk/phogoprint/internal/model"
+  "tomgalvin.uk/phogoprint/internal/printer"
+  "tomgalvin.uk/phogoprint/internal/template"
 )
 
-func main() {
-  fmt.Println("Hello, Gotenburg!")
-  DbConnect()
-  conn, err := printer.FromBluetoothName("T02")
+//go:embed Banana.jpg
+var img []byte
 
+func templateTest() *template.Template {
+  t := template.Template{
+    Texts: []template.Text{
+      {
+        Text:  "hello world the quick brown {param1} {param2} {param1} jumps over the lazy dog jackdaws love my big sphinx of quartz",
+        X:     10,
+        Y:     10,
+        Width: 48 * 7,
+      },
+    },
+    Images: []template.Image{
+      {
+        X:      30,
+        Y:      30,
+        Width:  100,
+        Height: 100,
+        Image:  img,
+      },
+    },
+    Parameters: []template.Parameter{
+      {
+        Name: "param1",
+      },
+      {
+        Name: "param2",
+      },
+    },
+    Landscape: false,
+    MinSize:   100,
+    MaxSize:   200,
+  }
+  return &t
+}
+
+func main() {
+  fmt.Println("Hello, Phogoprint!")
+  t := templateTest()
+  DbConnect(t)
+  conn, err := printer.FromBluetoothName("T02")
   if err != nil {
     slog.Error("Couldn't find printer", "err", err)
     return
@@ -26,8 +65,9 @@ func main() {
   conn.Connect()
 
   defer conn.Disconnect()
+  conn.Connect()
 
-  http.Handle("/", http.FileServer(http.Dir("http")))
+  http.Handle("/", http.FileServer(http.Dir("resources/http")))
 
   http.HandleFunc("/print", func(w http.ResponseWriter, r *http.Request) {
     handlePrint(conn, w, r)
@@ -77,7 +117,6 @@ func handlePrint(p printer.Connection, w http.ResponseWriter, r *http.Request) {
   }
 
   image, format, err := image.Decode(r.Body)
-
   if err != nil {
     http.Error(w, fmt.Sprintf("Couldn't read %s data: %v", contentType, err), http.StatusBadRequest)
     return

@@ -2,14 +2,16 @@ CREATE TABLE IF NOT EXISTS template(
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL,
-  landscape INT NOT NULL -- boolean
+  landscape INT NOT NULL, -- boolean
+  min_size INT NOT NULL,
+  max_size INT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS template_parameter(
   id INTEGER PRIMARY KEY,
   template_id INT NOT NULL,
   name TEXT NOT NULL,
-  max_length INT,
+  max_length INT NOT NULL,
   FOREIGN KEY (template_id) REFERENCES template(id)
 );
 
@@ -19,8 +21,8 @@ CREATE TABLE IF NOT EXISTS template_image(
   image BLOB NOT NULL,
   x INT NOT NULL,
   y INT NOT NULL,
-  width INT,
-  height INT,
+  width INT NOT NULL,
+  height INT NOT NULL,
   FOREIGN KEY (template_id) REFERENCES template(id)
 );
 
@@ -30,7 +32,7 @@ CREATE TABLE IF NOT EXISTS template_text(
   text TEXT NOT NULL,
   x INT NOT NULL,
   y INT NOT NULL,
-  width INT,
-  height INT,
+  width INT NOT NULL,
+  height INT NOT NULL,
   FOREIGN KEY (template_id) REFERENCES template(id)
 );
