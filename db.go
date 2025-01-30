@@ -7,7 +7,7 @@ import (
 	"image/png"
 	"os"
 
-	"gotenburg/template"
+	"tomgalvin.uk/phogoprint/template"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"

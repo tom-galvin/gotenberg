@@ -10,9 +10,9 @@ import (
   "net/http"
   "os"
 
-  "gotenburg/model"
-  "gotenburg/printer"
-  "gotenburg/template"
+  "tomgalvin.uk/phogoprint/model"
+  "tomgalvin.uk/phogoprint/printer"
+  "tomgalvin.uk/phogoprint/template"
 )
 
 //go:embed Banana.jpg
@@ -53,7 +53,7 @@ func templateTest() *template.Template {
 }
 
 func main() {
-  fmt.Println("Hello, Gotenburg!")
+  fmt.Println("Hello, Phogoprint!")
   t := templateTest()
   DbConnect(t)
   conn, err := printer.FromBluetoothName("T02")

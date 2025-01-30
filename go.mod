@@ -1,4 +1,4 @@
-module gotenburg
+module tomgalvin.uk/phogoprint
 
 go 1.23.3
 

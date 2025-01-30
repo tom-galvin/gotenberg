@@ -1,4 +1,4 @@
-# gotenberg
+# phogoprint
 
 This is an interface for Phonemo T02/M02 thermal laser printers.
 
@@ -19,8 +19,8 @@ It's currently very rough around the edges but it does work. The entire thing wa
 Follow these steps to run the application:
 
 ```sh
-git clone https://github.com/tom-galvin/gotenburg.git
-cd gotenburg
+git clone https://github.com/tom-galvin/phogoprint.git
+cd phogoprint
 go mod tidy
 go run .
 ```

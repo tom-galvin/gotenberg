@@ -1,7 +1,7 @@
 package model
 
 import (
-  "gotenburg/printer"
+  "tomgalvin.uk/phogoprint/printer"
 )
 
 type DeviceInfoResponse struct {
