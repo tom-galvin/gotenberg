@@ -10,9 +10,9 @@ import (
   "net/http"
   "os"
 
-  "tomgalvin.uk/phogoprint/model"
-  "tomgalvin.uk/phogoprint/printer"
-  "tomgalvin.uk/phogoprint/template"
+  "tomgalvin.uk/phogoprint/internal/model"
+  "tomgalvin.uk/phogoprint/internal/printer"
+  "tomgalvin.uk/phogoprint/internal/template"
 )
 
 //go:embed Banana.jpg

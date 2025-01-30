@@ -3,7 +3,7 @@
 package printer
 
 import (
-  "tomgalvin.uk/phogoprint/bitmap"
+  "tomgalvin.uk/phogoprint/internal/bitmap"
 )
 
 // Control characters
