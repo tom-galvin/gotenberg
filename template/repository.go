@@ -92,18 +92,14 @@ func QueryAndScanRows[T any](db *sql.DB, query string, id int, results []T, scan
 	}
 	defer rows.Close()
 
-	count := 0
-	for rows.Next() {
+  for count := 0; rows.Next(); count++ {
 		if count >= len(results) {
-      // shouldn't happen!
-      panic("preallocated slice size is smaller than the number of rows returned")
+      panic("preallocated slice size is smaller than the number of rows returned") // shouldn't happen
 		}
 
-		// Scan the row into the current element
 		if err := scanRow(rows, &results[count]); err != nil {
 			return fmt.Errorf("row scanning failed:\n%w", err)
 		}
-		count++
 	}
 
 	if err := rows.Err(); err != nil {
