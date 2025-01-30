@@ -12,29 +12,54 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
-// User defines model for User.
-type User struct {
-	Id   int    `json:"id"`
-	Name string `json:"name"`
+// Position defines model for Position.
+type Position struct {
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
-// CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
-type CreateUserJSONRequestBody = User
+// Template defines model for Template.
+type Template struct {
+	Images     *[]TemplateImage     `json:"images,omitempty"`
+	Parameters *[]TemplateParameter `json:"parameters,omitempty"`
+	Texts      *[]TemplateText      `json:"texts,omitempty"`
+}
+
+// TemplateImage defines model for TemplateImage.
+type TemplateImage struct {
+	Height int `json:"height"`
+
+	// Image base64 image data
+	Image    string   `json:"image"`
+	Position Position `json:"position"`
+	Width    int      `json:"width"`
+}
+
+// TemplateParameter defines model for TemplateParameter.
+type TemplateParameter struct {
+	MaxLength int    `json:"maxLength"`
+	Name      string `json:"name"`
+}
+
+// TemplateText defines model for TemplateText.
+type TemplateText struct {
+	Height   *int     `json:"height,omitempty"`
+	Position Position `json:"position"`
+	Text     string   `json:"text"`
+	Width    *int     `json:"width,omitempty"`
+}
+
+// CreateTemplateJSONRequestBody defines body for CreateTemplate for application/json ContentType.
+type CreateTemplateJSONRequestBody = Template
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Get a list of users
-	// (GET /users)
-	GetUsers(w http.ResponseWriter, r *http.Request)
-	// Create a new user
-	// (POST /users)
-	CreateUser(w http.ResponseWriter, r *http.Request)
-	// Delete a user
-	// (DELETE /users/{id})
-	DeleteUser(w http.ResponseWriter, r *http.Request, id int)
-	// Get a single user
-	// (GET /users/{id})
-	GetUser(w http.ResponseWriter, r *http.Request, id int)
+	// Create a new template
+	// (POST /template)
+	CreateTemplate(w http.ResponseWriter, r *http.Request)
+	// Get a single template
+	// (GET /template/{id})
+	GetTemplate(w http.ResponseWriter, r *http.Request, id int)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -46,11 +71,11 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-// GetUsers operation middleware
-func (siw *ServerInterfaceWrapper) GetUsers(w http.ResponseWriter, r *http.Request) {
+// CreateTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetUsers(w, r)
+		siw.Handler.CreateTemplate(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -60,22 +85,8 @@ func (siw *ServerInterfaceWrapper) GetUsers(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
-// CreateUser operation middleware
-func (siw *ServerInterfaceWrapper) CreateUser(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateUser(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteUser operation middleware
-func (siw *ServerInterfaceWrapper) DeleteUser(w http.ResponseWriter, r *http.Request) {
+// GetTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetTemplate(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
@@ -89,32 +100,7 @@ func (siw *ServerInterfaceWrapper) DeleteUser(w http.ResponseWriter, r *http.Req
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteUser(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetUser operation middleware
-func (siw *ServerInterfaceWrapper) GetUser(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetUser(w, r, id)
+		siw.Handler.GetTemplate(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -244,10 +230,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc("GET "+options.BaseURL+"/users", wrapper.GetUsers)
-	m.HandleFunc("POST "+options.BaseURL+"/users", wrapper.CreateUser)
-	m.HandleFunc("DELETE "+options.BaseURL+"/users/{id}", wrapper.DeleteUser)
-	m.HandleFunc("GET "+options.BaseURL+"/users/{id}", wrapper.GetUser)
+	m.HandleFunc("POST "+options.BaseURL+"/template", wrapper.CreateTemplate)
+	m.HandleFunc("GET "+options.BaseURL+"/template/{id}", wrapper.GetTemplate)
 
 	return m
 }

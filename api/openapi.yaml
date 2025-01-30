@@ -1,47 +1,30 @@
 openapi: 3.0.0
 info:
-  title: User API
+  title: Phogoprint API
   version: 1.0.0
 
 servers:
   - url: http://localhost:8080
 
 paths:
-  /users:
-    get:
-      summary: Get a list of users
-      operationId: GetUsers
-      responses:
-        "200":
-          description: A list of users
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/User"
-
+  /template:
     post:
-      summary: Create a new user
-      operationId: CreateUser
+      summary: Create a new template
+      operationId: CreateTemplate
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/User"
+              $ref: "#/components/schemas/Template"
       responses:
         "201":
-          description: User created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
+          description: Template created successfully
 
-  /users/{id}:
+  /template/{id}:
     get:
-      summary: Get a single user
-      operationId: GetUser
+      summary: Get a single template
+      operationId: GetTemplate
       parameters:
         - name: id
           in: path
@@ -50,40 +33,93 @@ paths:
             type: integer
       responses:
         "200":
-          description: The user details
+          description: The template
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/Template"
         "404":
-          description: User not found
-
-    delete:
-      summary: Delete a user
-      operationId: DeleteUser
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "204":
-          description: User deleted successfully
-        "404":
-          description: User not found
+          description: Template not found
 
 components:
   schemas:
-    User:
+    Template:
       type: object
       required:
-        - id
         - name
+        - landscape
       properties:
-        id:
+        parameters:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateParameter"
+        texts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateText"
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateImage"
+    TemplateImage:
+      type: object
+      required:
+        - image
+        - position
+        - width
+        - height
+      properties:
+        image:
+          type: string
+          example: "irjgt34toofw4ig0j0"
+          description: base64 image data
+        position:
+          $ref: "#/components/schemas/Position"
+        width:
           type: integer
-          example: 1
+          example: 100
+        height:
+          type: integer
+          example: 100
+    TemplateText:
+      type: object
+      required:
+        - text
+        - position
+      properties:
+        text:
+          type: string
+          example: "Post to: {{address}}"
+        position:
+          $ref: "#/components/schemas/Position"
+        width:
+          type: integer
+          example: 100
+        height:
+          type: integer
+          example: 100
+    Position:
+      type: object
+      required:
+        - x
+        - y
+      properties:
+        x:
+          type: integer
+          example: 10
+        y:
+          type: integer
+          example: 10
+    TemplateParameter:
+      type: object
+      required:
+        - name
+        - maxLength
+      properties:
         name:
           type: string
-          example: Alice
+          example: address
+        maxLength:
+          type: integer
+          example: 100
+
