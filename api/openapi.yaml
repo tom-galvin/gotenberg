@@ -49,6 +49,12 @@ components:
         - name
         - landscape
       properties:
+        name:
+          type: string
+          example: Postage Label
+        landscape:
+          type: boolean
+          example: true
         parameters:
           type: array
           items:

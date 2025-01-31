@@ -6,10 +6,13 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/oapi-codegen/runtime"
+	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 )
 
 // Position defines model for Position.
@@ -21,6 +24,8 @@ type Position struct {
 // Template defines model for Template.
 type Template struct {
 	Images     *[]TemplateImage     `json:"images,omitempty"`
+	Landscape  bool                 `json:"landscape"`
+	Name       string               `json:"name"`
 	Parameters *[]TemplateParameter `json:"parameters,omitempty"`
 	Texts      *[]TemplateText      `json:"texts,omitempty"`
 }
@@ -234,4 +239,141 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/template/{id}", wrapper.GetTemplate)
 
 	return m
+}
+
+type CreateTemplateRequestObject struct {
+	Body *CreateTemplateJSONRequestBody
+}
+
+type CreateTemplateResponseObject interface {
+	VisitCreateTemplateResponse(w http.ResponseWriter) error
+}
+
+type CreateTemplate201Response struct {
+}
+
+func (response CreateTemplate201Response) VisitCreateTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(201)
+	return nil
+}
+
+type GetTemplateRequestObject struct {
+	Id int `json:"id"`
+}
+
+type GetTemplateResponseObject interface {
+	VisitGetTemplateResponse(w http.ResponseWriter) error
+}
+
+type GetTemplate200JSONResponse Template
+
+func (response GetTemplate200JSONResponse) VisitGetTemplateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetTemplate404Response struct {
+}
+
+func (response GetTemplate404Response) VisitGetTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+// StrictServerInterface represents all server handlers.
+type StrictServerInterface interface {
+	// Create a new template
+	// (POST /template)
+	CreateTemplate(ctx context.Context, request CreateTemplateRequestObject) (CreateTemplateResponseObject, error)
+	// Get a single template
+	// (GET /template/{id})
+	GetTemplate(ctx context.Context, request GetTemplateRequestObject) (GetTemplateResponseObject, error)
+}
+
+type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
+type StrictMiddlewareFunc = strictnethttp.StrictHTTPMiddlewareFunc
+
+type StrictHTTPServerOptions struct {
+	RequestErrorHandlerFunc  func(w http.ResponseWriter, r *http.Request, err error)
+	ResponseErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, err error)
+}
+
+func NewStrictHandler(ssi StrictServerInterface, middlewares []StrictMiddlewareFunc) ServerInterface {
+	return &strictHandler{ssi: ssi, middlewares: middlewares, options: StrictHTTPServerOptions{
+		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		},
+		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		},
+	}}
+}
+
+func NewStrictHandlerWithOptions(ssi StrictServerInterface, middlewares []StrictMiddlewareFunc, options StrictHTTPServerOptions) ServerInterface {
+	return &strictHandler{ssi: ssi, middlewares: middlewares, options: options}
+}
+
+type strictHandler struct {
+	ssi         StrictServerInterface
+	middlewares []StrictMiddlewareFunc
+	options     StrictHTTPServerOptions
+}
+
+// CreateTemplate operation middleware
+func (sh *strictHandler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
+	var request CreateTemplateRequestObject
+
+	var body CreateTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTemplate(ctx, request.(CreateTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTemplateResponseObject); ok {
+		if err := validResponse.VisitCreateTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTemplate operation middleware
+func (sh *strictHandler) GetTemplate(w http.ResponseWriter, r *http.Request, id int) {
+	var request GetTemplateRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTemplate(ctx, request.(GetTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTemplateResponseObject); ok {
+		if err := validResponse.VisitGetTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
