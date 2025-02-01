@@ -16,11 +16,11 @@ import (
 //go:embed resources/sql/schema.sql
 var schema string
 
-func DbConnect(t0 *template.Template) {
+func DbConnect(t0 *template.Template) *template.TemplateRepository {
 	db, _ := sql.Open("sqlite3", "file:app.db")
 	if _, err := db.Exec(schema); err != nil {
 		fmt.Println("Couldn't set up database", err)
-		return
+		return nil
 	}
 	r := template.TemplateRepository{Db: db}
 
@@ -29,7 +29,7 @@ func DbConnect(t0 *template.Template) {
 	})
 	if err != nil {
 		fmt.Println("Error inserting", err)
-		return
+		return &r
 	}
 
 	t, err := r.Get(t0.Id)
@@ -59,4 +59,5 @@ func DbConnect(t0 *template.Template) {
 	}
 	defer outFile.Close()
 	png.Encode(outFile, rendered)
+	return &r
 }

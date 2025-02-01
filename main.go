@@ -10,10 +10,11 @@ import (
 	"net/http"
 	"os"
 
+	"tomgalvin.uk/phogoprint/api"
+	"tomgalvin.uk/phogoprint/internal/server"
 	"tomgalvin.uk/phogoprint/internal/model"
 	"tomgalvin.uk/phogoprint/internal/printer"
 	"tomgalvin.uk/phogoprint/internal/template"
-	"tomgalvin.uk/phogoprint/cmd"
 )
 
 //go:embed Banana.jpg
@@ -57,24 +58,37 @@ func main() {
 	fmt.Println("Hello, Phogoprint!")
 	t := templateTest()
 	DbConnect(t)
-	conn, err := printer.FromBluetoothName("T02")
+	var conn *printer.BluetoothConnection
+	/* conn, err := printer.FromBluetoothName("T02")
 	if err != nil {
 		slog.Error("Couldn't find printer", "err", err)
 		return
+	} */
+
+	// conn.Connect()
+
+	// defer conn.Disconnect()
+
+	
+
+	mux := http.NewServeMux()
+	si := server.Server{
+		TemplateRepository: nil,
+		Connection:         conn,
 	}
+	sh := api.NewStrictHandler(&si, nil)
+	h := http.StripPrefix("/api", api.Handler(sh))
 
-	conn.Connect()
 
-	defer conn.Disconnect()
-	conn.Connect()
+	mux.Handle("/api/", h)
 
-	http.Handle("/", http.FileServer(http.Dir("resources/http")))
+	mux.Handle("/", http.FileServer(http.Dir("resources/web")))
 
-	http.HandleFunc("/print", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/print", func(w http.ResponseWriter, r *http.Request) {
 		handlePrint(conn, w, r)
 	})
 
-	http.HandleFunc("/battery", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/battery", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Only GET method is supported", http.StatusMethodNotAllowed)
 			return
@@ -99,7 +113,8 @@ func main() {
 
 	port := "8080"
 	fmt.Printf("Starting server on port %s...\n", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	server := http.Server{Addr:":"+port,Handler:mux}
+	if err := server.ListenAndServe(); err != nil {
 		fmt.Printf("Error starting server: %v\n", err)
 		os.Exit(1)
 	}

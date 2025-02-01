@@ -1,4 +1,4 @@
-package cmd
+package server
 
 import (
 	"context"
@@ -16,7 +16,7 @@ var _ api.StrictServerInterface = (*Server)(nil)
 
 type Server struct {
 	Connection printer.Connection
-	TemplateRepository template.TemplateRepository
+	TemplateRepository *template.TemplateRepository
 }
 
 func (s *Server) GetTemplate(ctx context.Context, request api.GetTemplateRequestObject) (api.GetTemplateResponseObject, error) {

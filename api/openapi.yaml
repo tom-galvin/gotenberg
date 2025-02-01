@@ -43,6 +43,26 @@ paths:
 
 components:
   schemas:
+    DeviceInfo:
+      type: object
+      required:
+        - batteryLevel
+        - firmwareVersion
+        - state
+      properties:
+        batteryLevel:
+          type: int
+          description: Battery level of device as a percentage
+          example: 100
+        firmwareVersion:
+          type: string
+          description: Device specific firmware version string
+          example: "3.0.7"
+        state:
+          $ref: "#/components/schemas/DeviceState"
+    DeviceState:
+      type: string
+      enum: [DISCONNECTED, CONNECTING, READY, BUSY, OUT_OF_PAPER]
     Template:
       type: object
       required:
