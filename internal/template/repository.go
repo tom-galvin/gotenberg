@@ -32,6 +32,30 @@ func (r *TemplateRepository) readTemplateBase(id int) (*Template, error) {
   return &t, nil
 }
 
+func (r *TemplateRepository) List() ([]Template, error) {
+	rows, err := r.Db.Query(`SELECT id, name, landscape FROM template`)
+	if err != nil {
+		return nil, fmt.Errorf("Query execution failed:\n%w", err)
+	}
+	defer rows.Close()
+
+	templates := []Template{}
+  for count := 0; rows.Next(); count++ {
+		t := Template{}
+		if err := rows.Scan(&t.Id, &t.Name, &t.Landscape); err != nil {
+			return nil, fmt.Errorf("row scanning failed:\n%w", err)
+		}
+		templates = append(templates, t)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Error iterating rows:\n%w", err)
+	}
+
+	return templates, nil
+
+}
+
 func (r *TemplateRepository) Get(id int) (*Template, error) {
   t, err := r.readTemplateBase(id)
   if err != nil {

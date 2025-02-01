@@ -22,7 +22,18 @@ paths:
           description: Template created successfully
         "404":
           description: No template found
-
+    get:
+      summary: List templates
+      operationId: ListTemplate
+      responses:
+        "200":
+          description: The template
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
   /template/{id}:
     get:
       summary: Get a single template
@@ -42,7 +53,46 @@ paths:
                 $ref: "#/components/schemas/Template"
         "404":
           description: Template not found
-
+  /printer:
+    post:
+      summary: Print an image directly
+      operationId: PrintImage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - contentType
+                - data
+              properties:
+                contentType:
+                  type: string
+                  example: "image/png"
+                data:
+                  type: string
+                  format: binary
+      responses:
+        "202":
+          description: Printer successfully printed
+        "422":
+          description: Unprintable image
+        "503":
+          description: Printer unavailable
+  /printer/info:
+    get:
+      summary: Get device info
+      operationId: GetPrinterInfo
+      responses:
+        "200":
+          description: The device info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceInfo"
+        "503":
+          description: Printer unavailable
 components:
   schemas:
     DeviceInfo:
@@ -53,7 +103,7 @@ components:
         - state
       properties:
         batteryLevel:
-          type: int
+          type: integer
           description: Battery level of device as a percentage
           example: 100
         firmwareVersion:
@@ -71,6 +121,9 @@ components:
         - name
         - landscape
       properties:
+        id:
+          type: integer
+          example: 1
         name:
           type: string
           example: Postage Label

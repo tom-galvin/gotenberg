@@ -10,6 +10,7 @@ import (
 
 func mapTemplateToJson(t *template.Template) *api.Template {
 	j := api.Template{
+		Id: &t.Id,
 		Name: t.Name,
 		Landscape: t.Landscape,
 	}

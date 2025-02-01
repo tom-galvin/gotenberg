@@ -1,9 +1,15 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"image"
+	"log/slog"
+
+	_ "image/jpeg"
+	_ "image/png"
 
 	"tomgalvin.uk/phogoprint/api"
 	"tomgalvin.uk/phogoprint/internal/printer"
@@ -13,8 +19,64 @@ import (
 var _ api.StrictServerInterface = (*Server)(nil)
 
 type Server struct {
-	Connection printer.Connection
+	Connection         printer.Connection
 	TemplateRepository *template.TemplateRepository
+}
+
+func (s *Server) PrintImage(ctx context.Context, request api.PrintImageRequestObject) (api.PrintImageResponseObject, error) {
+	imageData, err := request.Body.Data.Bytes()
+	if err != nil {
+		return api.PrintImage422Response{}, nil
+	}
+	image, format, err := image.Decode(bytes.NewReader(imageData))
+	if err != nil {
+		return api.PrintImage422Response{}, nil
+	}
+
+	fmt.Printf("Received %s image\n", format)
+
+	if err := s.Connection.Connect(); err != nil {
+		slog.Error("Couldn't connect to printer", "error", err)
+		return api.PrintImage503Response{}, nil
+	} else {
+		err = s.Connection.GetPrinter().WriteImage(image)
+		if err != nil {
+			slog.Error("Couldn't write image to printer", "error", err)
+			return api.PrintImage503Response{}, nil
+		}
+
+		return api.PrintImage202Response{}, nil
+	}
+}
+
+func (s *Server) GetPrinterInfo(ctx context.Context, request api.GetPrinterInfoRequestObject) (api.GetPrinterInfoResponseObject, error) {
+	if !s.Connection.GetPrinter().IsConnected() {
+		return api.GetPrinterInfo503Response{}, nil
+	} else {
+		info := s.Connection.GetPrinter().Info()
+		return api.GetPrinterInfo200JSONResponse{
+			BatteryLevel:    info.BatteryLevel,
+			State:           mapDeviceStateToJson(info.State),
+			FirmwareVersion: info.FirmwareVersion,
+		}, nil
+	}
+}
+
+func mapDeviceStateToJson(s printer.DeviceState) api.DeviceState {
+	switch s {
+	case printer.Disconnected:
+		return api.DISCONNECTED
+	case printer.Connecting:
+		return api.CONNECTING
+	case printer.Ready:
+		return api.READY
+	case printer.Busy:
+		return api.BUSY
+	case printer.OutOfPaper:
+		return api.OUTOFPAPER
+	default:
+		panic(fmt.Errorf("Unknown device state %v", s))
+	}
 }
 
 func (s *Server) GetTemplate(ctx context.Context, request api.GetTemplateRequestObject) (api.GetTemplateResponseObject, error) {
@@ -30,8 +92,19 @@ func (s *Server) GetTemplate(ctx context.Context, request api.GetTemplateRequest
 	}
 }
 
+func (s *Server) ListTemplate(ctx context.Context, request api.ListTemplateRequestObject) (api.ListTemplateResponseObject, error) {
+	ts, err := s.TemplateRepository.List()
+	if err != nil {
+		panic(err)
+	}
+	tsJson := make([]api.Template, len(ts))
+	for i := 0; i < len(ts); i++ {
+		tsJson[i] = *mapTemplateToJson(&ts[i])
+	}
+	return api.ListTemplate200JSONResponse(tsJson), nil
+}
+
 func (s *Server) CreateTemplate(ctx context.Context, request api.CreateTemplateRequestObject) (api.CreateTemplateResponseObject, error) {
-	fmt.Println("create")
 	r := s.TemplateRepository
 
 	t, err := mapTemplateFromJson(request.Body)
@@ -46,4 +119,3 @@ func (s *Server) CreateTemplate(ctx context.Context, request api.CreateTemplateR
 	}
 	return api.CreateTemplate201Response{}, nil
 }
-

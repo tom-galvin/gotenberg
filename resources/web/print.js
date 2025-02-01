@@ -34,7 +34,7 @@ document.getElementById('text').addEventListener('input', (event) => {
 const fetchBatteryLevel = async () => {
   try {
     // Perform the POST request
-    const response = await fetch("/battery", {method: "GET"});
+    const response = await fetch("/api/printer/info", {method: "GET"});
 
     // Ensure the response is OK
     if (!response.ok) {
@@ -59,14 +59,27 @@ const updateBatteryLevel = async () => {
   document.getElementById("battery-level").innerHTML = await fetchBatteryLevel();
 };
 
+const fileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result.split(",")[1]); // Extract Base64
+    reader.onerror = (error) => reject(error);
+  });
+}
 const printImageServer = async (imageData, imageType) => {
   try {
-    const response = await fetch("/print", {
+    const body = {
+      "data": await fileToBase64(imageData),
+      "contentType": imageType
+    };
+    console.log(JSON.stringify(body));
+    const response = await fetch("/api/printer", {
       method: "POST",
       headers: {
         "Content-Type": imageType,
       },
-      body: imageData
+      body: JSON.stringify(body)
     });
 
     // Ensure the response is OK
@@ -76,8 +89,7 @@ const printImageServer = async (imageData, imageType) => {
       // Read the response as text
       const responseText = await response.text();
 
-      // Return or store the response as a string
-      alert(responseText);
+      alert(`HTTP ${response.status}: ${responseText}`);
     }
   } catch (error) {
     console.error("Error during POST request:", error);
