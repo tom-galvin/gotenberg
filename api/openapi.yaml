@@ -20,6 +20,8 @@ paths:
       responses:
         "201":
           description: Template created successfully
+        "404":
+          description: No template found
 
   /template/{id}:
     get:

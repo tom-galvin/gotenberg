@@ -257,6 +257,14 @@ func (response CreateTemplate201Response) VisitCreateTemplateResponse(w http.Res
 	return nil
 }
 
+type CreateTemplate404Response struct {
+}
+
+func (response CreateTemplate404Response) VisitCreateTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type GetTemplateRequestObject struct {
 	Id int `json:"id"`
 }
