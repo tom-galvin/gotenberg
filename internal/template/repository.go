@@ -10,6 +10,10 @@ type TemplateRepository struct {
   Db *sql.DB
 }
 
+func (r *TemplateRepository) Close() error {
+	return r.Db.Close()
+}
+
 func (r *TemplateRepository) readTemplateBase(id int) (*Template, error) {
   row := r.Db.QueryRow(`
     SELECT name, created_at, landscape
@@ -79,7 +83,7 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
       return r.Scan(&i.Id, &i.Text, &i.X, &i.Y, &i.Width, &i.Height)
     },
   ); err != nil {
-    return nil, fmt.Errorf("Failed to read child texts for image::\n%w", err)
+    return nil, fmt.Errorf("Failed to read child texts for image:\n%w", err)
   }
 
   return t, nil
@@ -135,14 +139,15 @@ func (r *TemplateRepository) Transact(f func(*sql.Tx) error) error {
 
 func (r *TemplateRepository) Create(tx *sql.Tx, t *Template) error {
   row := tx.QueryRow(`
-    INSERT INTO template(name, created_at, landscape)
-    VALUES (?, ?, ?)
+    INSERT INTO template(name, created_at, landscape, min_size, max_size)
+    VALUES (?, ?, ?, 100, 200)
     RETURNING id`, t.Name, t.CreatedAt, t.Landscape)
   if err := row.Scan(&t.Id); err != nil {
     return fmt.Errorf("Failed to insert into template:\n%w", err)
   }
 
   r.insertChildren(tx, t)
+	fmt.Println(t.Id)
 
   return nil
 }

@@ -1,140 +1,121 @@
 package main
 
 import (
-  _ "embed"
-  "encoding/json"
-  "fmt"
-  "image"
-  _ "image/jpeg"
-  "log/slog"
-  "net/http"
-  "os"
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"image"
+	_ "image/jpeg"
+	"log/slog"
+	"net/http"
+	"os"
 
-  "tomgalvin.uk/phogoprint/internal/model"
-  "tomgalvin.uk/phogoprint/internal/printer"
-  "tomgalvin.uk/phogoprint/internal/template"
+	"tomgalvin.uk/phogoprint/api"
+	"tomgalvin.uk/phogoprint/internal/server"
+	"tomgalvin.uk/phogoprint/internal/model"
+	"tomgalvin.uk/phogoprint/internal/printer"
 )
 
 //go:embed Banana.jpg
 var img []byte
 
-func templateTest() *template.Template {
-  t := template.Template{
-    Texts: []template.Text{
-      {
-        Text:  "hello world the quick brown {param1} {param2} {param1} jumps over the lazy dog jackdaws love my big sphinx of quartz",
-        X:     10,
-        Y:     10,
-        Width: 48 * 7,
-      },
-    },
-    Images: []template.Image{
-      {
-        X:      30,
-        Y:      30,
-        Width:  100,
-        Height: 100,
-        Image:  img,
-      },
-    },
-    Parameters: []template.Parameter{
-      {
-        Name: "param1",
-      },
-      {
-        Name: "param2",
-      },
-    },
-    Landscape: false,
-    MinSize:   100,
-    MaxSize:   200,
-  }
-  return &t
-}
-
 func main() {
-  fmt.Println("Hello, Phogoprint!")
-  t := templateTest()
-  DbConnect(t)
-  conn, err := printer.FromBluetoothName("T02")
-  if err != nil {
-    slog.Error("Couldn't find printer", "err", err)
-    return
-  }
+	fmt.Println("Hello, Phogoprint!")
+	r := NewRepository()
 
-  conn.Connect()
+	var conn *printer.BluetoothConnection
+	/* conn, err := printer.FromBluetoothName("T02")
+	if err != nil {
+		slog.Error("Couldn't find printer", "err", err)
+		return
+	} */
 
-  defer conn.Disconnect()
-  conn.Connect()
+	// conn.Connect()
 
-  http.Handle("/", http.FileServer(http.Dir("resources/http")))
+	// defer conn.Disconnect()
 
-  http.HandleFunc("/print", func(w http.ResponseWriter, r *http.Request) {
-    handlePrint(conn, w, r)
-  })
+	
 
-  http.HandleFunc("/battery", func(w http.ResponseWriter, r *http.Request) {
-    if r.Method != http.MethodGet {
-      http.Error(w, "Only GET method is supported", http.StatusMethodNotAllowed)
-      return
-    }
-    if !conn.GetPrinter().IsConnected() {
-      w.WriteHeader(http.StatusServiceUnavailable)
-      fmt.Fprintf(w, "Not connected")
-    } else {
-      info := conn.GetPrinter().Info()
+	mux := http.NewServeMux()
+	si := server.Server{
+		TemplateRepository: r,
+		Connection:         conn,
+	}
+	sh := api.NewStrictHandler(&si, nil)
+	h := http.StripPrefix("/api", api.Handler(sh))
 
-      infoData, err := json.Marshal(model.FromDeviceInfo(info))
-      if err != nil {
-        panic("fuck!")
-      }
 
-      w.WriteHeader(http.StatusOK)
-      if _, err = w.Write(infoData); err != nil {
-        slog.Error("Couldn't write HTTP response", "error", err)
-      }
-    }
-  })
+	mux.Handle("/api/", h)
 
-  port := "8080"
-  fmt.Printf("Starting server on port %s...\n", port)
-  if err := http.ListenAndServe(":"+port, nil); err != nil {
-    fmt.Printf("Error starting server: %v\n", err)
-    os.Exit(1)
-  }
+	mux.Handle("/", http.FileServer(http.Dir("resources/web")))
+
+	mux.HandleFunc("/print", func(w http.ResponseWriter, r *http.Request) {
+		handlePrint(conn, w, r)
+	})
+
+	mux.HandleFunc("/battery", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Only GET method is supported", http.StatusMethodNotAllowed)
+			return
+		}
+		if !conn.GetPrinter().IsConnected() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprintf(w, "Not connected")
+		} else {
+			info := conn.GetPrinter().Info()
+
+			infoData, err := json.Marshal(model.FromDeviceInfo(info))
+			if err != nil {
+				panic("fuck!")
+			}
+
+			w.WriteHeader(http.StatusOK)
+			if _, err = w.Write(infoData); err != nil {
+				slog.Error("Couldn't write HTTP response", "error", err)
+			}
+		}
+	})
+
+	port := "8080"
+	fmt.Printf("Starting server on port %s...\n", port)
+	server := http.Server{Addr:":"+port,Handler:mux}
+	if err := server.ListenAndServe(); err != nil {
+		fmt.Printf("Error starting server: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func handlePrint(p printer.Connection, w http.ResponseWriter, r *http.Request) {
-  if r.Method != http.MethodPost {
-    http.Error(w, "Only POST method is supported", http.StatusMethodNotAllowed)
-    return
-  }
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is supported", http.StatusMethodNotAllowed)
+		return
+	}
 
-  contentType := r.Header.Get("Content-Type")
-  if contentType != "image/png" && contentType != "image/jpeg" {
-    http.Error(w, "Invalid content type", http.StatusBadRequest)
-    return
-  }
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "image/png" && contentType != "image/jpeg" {
+		http.Error(w, "Invalid content type", http.StatusBadRequest)
+		return
+	}
 
-  image, format, err := image.Decode(r.Body)
-  if err != nil {
-    http.Error(w, fmt.Sprintf("Couldn't read %s data: %v", contentType, err), http.StatusBadRequest)
-    return
-  }
-  defer r.Body.Close()
+	image, format, err := image.Decode(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Couldn't read %s data: %v", contentType, err), http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
 
-  fmt.Printf("Received %s image\n", format)
+	fmt.Printf("Received %s image\n", format)
 
-  if err := p.Connect(); err != nil {
-    slog.Error("Couldn't connect to printer!", "error", err)
-    w.WriteHeader(http.StatusServiceUnavailable)
-  } else {
-    err = p.GetPrinter().WriteImage(image)
+	if err := p.Connect(); err != nil {
+		slog.Error("Couldn't connect to printer!", "error", err)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	} else {
+		err = p.GetPrinter().WriteImage(image)
 
-    if err == nil {
-      w.WriteHeader(http.StatusOK)
-    } else {
-      w.WriteHeader(http.StatusServiceUnavailable)
-    }
-  }
+		if err == nil {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+	}
 }

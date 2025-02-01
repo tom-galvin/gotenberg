@@ -11,28 +11,28 @@ import (
 )
 
 type Bitmap interface {
-  Width() int
-  Height() int
-  GetBit(x int, y int) byte
+	Width() int
+	Height() int
+	GetBit(x int, y int) byte
 }
 
 type PixelBitmap struct {
-  pixels [][]byte
-  width, height int
+	pixels [][]byte
+	width, height int
 }
 
 func (b *PixelBitmap) Width() int {
-  return b.width
+	return b.width
 }
 
 func (b *PixelBitmap) Height() int {
-  return b.height
+	return b.height
 }
 
 func (b *PixelBitmap) GetBit(x int, y int) byte {
-  return b.pixels[y][x]
+	return b.pixels[y][x]
 }
 
 func (b *PixelBitmap) String() string {
-  return fmt.Sprintf("PixelBitmap(%d,%d)", b.width, b.height)
+	return fmt.Sprintf("PixelBitmap(%d,%d)", b.width, b.height)
 }
