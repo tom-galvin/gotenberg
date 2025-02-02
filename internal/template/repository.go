@@ -66,7 +66,7 @@ func (r *TemplateRepository) GetFont(u uuid.UUID) (*Font, error) {
 	row := r.Db.QueryRow(`
 	  SELECT uuid, name, builtin_name, font_data
 		FROM font
-		WHERE uuid = ?:0`, u.String())
+		WHERE uuid = ?`, u.String())
 
 	var f Font
 
@@ -84,7 +84,7 @@ func (r *TemplateRepository) GetFont(u uuid.UUID) (*Font, error) {
 }
 
 func (r *TemplateRepository) List() ([]Template, error) {
-	rows, err := r.Db.Query(`SELECT id, name, landscape FROM template`)
+	rows, err := r.Db.Query(`SELECT id, name, landscape, min_size, max_size FROM template`)
 	if err != nil {
 		return nil, fmt.Errorf("Query execution failed:\n%w", err)
 	}
@@ -93,7 +93,7 @@ func (r *TemplateRepository) List() ([]Template, error) {
 	templates := []Template{}
   for count := 0; rows.Next(); count++ {
 		t := Template{}
-		if err := rows.Scan(&t.Id, &t.Name, &t.Landscape); err != nil {
+		if err := rows.Scan(&t.Id, &t.Name, &t.Landscape, &t.MinSize, &t.MaxSize); err != nil {
 			return nil, fmt.Errorf("row scanning failed:\n%w", err)
 		}
 		templates = append(templates, t)
@@ -151,7 +151,7 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
 
   t.Texts = make([]Text, textCount)
   if err := QueryAndScanRows(r.Db, `
-    SELECT id, t.text, t.x, t.y, t.width, t.height, t.font_size, f.uuid, f.name, f.builtin_name, f.font_data
+    SELECT t.id, t.text, t.x, t.y, t.width, t.height, t.font_size, f.uuid, f.name, f.builtin_name, f.font_data
     FROM template_text t
 		JOIN font f ON f.id = t.font_id
     WHERE t.template_id = ?`, id, t.Texts, func(r *sql.Rows, i *Text) error {
@@ -227,7 +227,6 @@ func (r *TemplateRepository) Create(tx *sql.Tx, t *Template) error {
   }
 
   r.insertChildren(tx, t)
-	fmt.Println(t.Id)
 
   return nil
 }

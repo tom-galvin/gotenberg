@@ -81,8 +81,6 @@ func measureAndDrawChildText(text *Text, i *image.RGBA64) Measure {
     for _, line := range wrappedText {
       d.Dot.X = fixed.I(m.X)
       d.Dot.Y += text.FontFace.Metrics().Ascent
-      fmt.Println(line)
-      fmt.Println(d.Dot)
       d.DrawString(line)
       d.Dot.Y += text.FontFace.Metrics().Descent
     }

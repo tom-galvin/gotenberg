@@ -260,7 +260,6 @@ components:
       type: object
       required:
         - name
-        - maxLength
       properties:
         name:
           type: string

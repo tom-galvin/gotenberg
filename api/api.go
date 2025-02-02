@@ -85,7 +85,7 @@ type TemplateImage struct {
 
 // TemplateParameter defines model for TemplateParameter.
 type TemplateParameter struct {
-	MaxLength int    `json:"maxLength"`
+	MaxLength *int   `json:"maxLength,omitempty"`
 	Name      string `json:"name"`
 }
 

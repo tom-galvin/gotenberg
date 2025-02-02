@@ -28,7 +28,7 @@ func loadImagesForTemplate(t *Template) error {
 
 func loadFontsForTemplate(t *Template) error {
 	for i := 0; i < len(t.Texts); i++ {
-		loadedFontFace, err := loadFont(&t.Texts[i].Font)
+		loadedFontFace, err := loadFont(&t.Texts[i].Font, t.Texts[i].FontSize)
 		if err != nil {
 			return fmt.Errorf("Couldn't load font for template text at index %v:\n%w", i, err)
 		}
@@ -52,7 +52,7 @@ func getFontData(f *Font) ([]byte, error) {
 	}
 }
 
-func loadFont(f *Font) (font.Face, error) {
+func loadFont(f *Font, size int) (font.Face, error) {
 	fontData, err := getFontData(f)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't get font data:\n%w", err)
@@ -63,7 +63,7 @@ func loadFont(f *Font) (font.Face, error) {
 	}
 
 	fontFace, err := opentype.NewFace(parsedFont, &opentype.FaceOptions{
-		Size:    24,
+		Size:    float64(size),
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})

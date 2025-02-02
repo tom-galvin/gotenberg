@@ -77,12 +77,14 @@ func (s *Server) mapTemplateFromJson(j *api.Template) (*template.Template, error
 
 func mapParameterToJson(src *template.Parameter, dest *api.TemplateParameter) {
 	dest.Name = src.Name
-	dest.MaxLength = src.MaxLength
+	dest.MaxLength = &src.MaxLength
 }
 
 func mapParameterFromJson(src *api.TemplateParameter, dest *template.Parameter) {
 	dest.Name = src.Name
-	dest.MaxLength = src.MaxLength
+	if src.MaxLength != nil {
+		dest.MaxLength = *src.MaxLength
+	}
 }
 
 func mapTextToJson(src *template.Text, dest *api.TemplateText) {
