@@ -38,10 +38,21 @@ type DeviceInfo struct {
 // DeviceState defines model for DeviceState.
 type DeviceState string
 
+// ParameterValue defines model for ParameterValue.
+type ParameterValue struct {
+	ParameterName string `json:"parameterName"`
+	Value         string `json:"value"`
+}
+
 // Position defines model for Position.
 type Position struct {
 	X int `json:"x"`
 	Y int `json:"y"`
+}
+
+// PrintTemplateRequest defines model for PrintTemplateRequest.
+type PrintTemplateRequest struct {
+	ParameterValues []ParameterValue `json:"parameterValues"`
 }
 
 // Template defines model for Template.
@@ -49,6 +60,8 @@ type Template struct {
 	Id         *int                 `json:"id,omitempty"`
 	Images     *[]TemplateImage     `json:"images,omitempty"`
 	Landscape  bool                 `json:"landscape"`
+	MaxSize    int                  `json:"maxSize"`
+	MinSize    int                  `json:"minSize"`
 	Name       string               `json:"name"`
 	Parameters *[]TemplateParameter `json:"parameters,omitempty"`
 	Texts      *[]TemplateText      `json:"texts,omitempty"`
@@ -90,6 +103,9 @@ type PrintImageJSONRequestBody PrintImageJSONBody
 // CreateTemplateJSONRequestBody defines body for CreateTemplate for application/json ContentType.
 type CreateTemplateJSONRequestBody = Template
 
+// PrintTemplateJSONRequestBody defines body for PrintTemplate for application/json ContentType.
+type PrintTemplateJSONRequestBody = PrintTemplateRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Print an image directly
@@ -107,6 +123,9 @@ type ServerInterface interface {
 	// Get a single template
 	// (GET /template/{id})
 	GetTemplate(w http.ResponseWriter, r *http.Request, id int)
+	// Print a template
+	// (POST /template/{id}/print)
+	PrintTemplate(w http.ResponseWriter, r *http.Request, id int)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -190,6 +209,31 @@ func (siw *ServerInterfaceWrapper) GetTemplate(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetTemplate(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PrintTemplate operation middleware
+func (siw *ServerInterfaceWrapper) PrintTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PrintTemplate(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -324,6 +368,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/template", wrapper.ListTemplate)
 	m.HandleFunc("POST "+options.BaseURL+"/template", wrapper.CreateTemplate)
 	m.HandleFunc("GET "+options.BaseURL+"/template/{id}", wrapper.GetTemplate)
+	m.HandleFunc("POST "+options.BaseURL+"/template/{id}/print", wrapper.PrintTemplate)
 
 	return m
 }
@@ -449,6 +494,50 @@ func (response GetTemplate404Response) VisitGetTemplateResponse(w http.ResponseW
 	return nil
 }
 
+type PrintTemplateRequestObject struct {
+	Id   int `json:"id"`
+	Body *PrintTemplateJSONRequestBody
+}
+
+type PrintTemplateResponseObject interface {
+	VisitPrintTemplateResponse(w http.ResponseWriter) error
+}
+
+type PrintTemplate202Response struct {
+}
+
+func (response PrintTemplate202Response) VisitPrintTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type PrintTemplate404Response struct {
+}
+
+func (response PrintTemplate404Response) VisitPrintTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type PrintTemplate422JSONResponse struct {
+	Reason string `json:"reason"`
+}
+
+func (response PrintTemplate422JSONResponse) VisitPrintTemplateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PrintTemplate503Response struct {
+}
+
+func (response PrintTemplate503Response) VisitPrintTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(503)
+	return nil
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Print an image directly
@@ -466,6 +555,9 @@ type StrictServerInterface interface {
 	// Get a single template
 	// (GET /template/{id})
 	GetTemplate(ctx context.Context, request GetTemplateRequestObject) (GetTemplateResponseObject, error)
+	// Print a template
+	// (POST /template/{id}/print)
+	PrintTemplate(ctx context.Context, request PrintTemplateRequestObject) (PrintTemplateResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -626,6 +718,39 @@ func (sh *strictHandler) GetTemplate(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetTemplateResponseObject); ok {
 		if err := validResponse.VisitGetTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PrintTemplate operation middleware
+func (sh *strictHandler) PrintTemplate(w http.ResponseWriter, r *http.Request, id int) {
+	var request PrintTemplateRequestObject
+
+	request.Id = id
+
+	var body PrintTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PrintTemplate(ctx, request.(PrintTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PrintTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PrintTemplateResponseObject); ok {
+		if err := validResponse.VisitPrintTemplateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -13,6 +13,8 @@ func mapTemplateToJson(t *template.Template) *api.Template {
 		Id: &t.Id,
 		Name: t.Name,
 		Landscape: t.Landscape,
+		MinSize: t.MinSize,
+		MaxSize: t.MaxSize,
 	}
 
 	parameters := make([]api.TemplateParameter, len(t.Parameters))
@@ -41,6 +43,8 @@ func mapTemplateFromJson(j *api.Template) (*template.Template, error) {
 		Name: j.Name,
 		CreatedAt: time.Now(),
 		Landscape: j.Landscape,
+		MinSize: j.MinSize,
+		MaxSize: j.MaxSize,
 	}
 
 	if j.Parameters != nil {

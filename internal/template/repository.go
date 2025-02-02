@@ -16,12 +16,12 @@ func (r *TemplateRepository) Close() error {
 
 func (r *TemplateRepository) readTemplateBase(id int) (*Template, error) {
   row := r.Db.QueryRow(`
-    SELECT name, created_at, landscape
+    SELECT name, created_at, landscape, min_size, max_size
     FROM template
     WHERE id = ?`, id)
 
   t := Template{Id: id}
-  if err := row.Scan(&t.Name, &t.CreatedAt, &t.Landscape); err != nil {
+  if err := row.Scan(&t.Name, &t.CreatedAt, &t.Landscape, &t.MinSize, &t.MaxSize); err != nil {
     if errors.Is(err, sql.ErrNoRows) {
       return nil, nil
     } else {
@@ -53,7 +53,6 @@ func (r *TemplateRepository) List() ([]Template, error) {
 	}
 
 	return templates, nil
-
 }
 
 func (r *TemplateRepository) Get(id int) (*Template, error) {
@@ -164,8 +163,8 @@ func (r *TemplateRepository) Transact(f func(*sql.Tx) error) error {
 func (r *TemplateRepository) Create(tx *sql.Tx, t *Template) error {
   row := tx.QueryRow(`
     INSERT INTO template(name, created_at, landscape, min_size, max_size)
-    VALUES (?, ?, ?, 100, 200)
-    RETURNING id`, t.Name, t.CreatedAt, t.Landscape)
+    VALUES (?, ?, ?, ?, ?)
+    RETURNING id`, t.Name, t.CreatedAt, t.Landscape, t.MinSize, t.MaxSize)
   if err := row.Scan(&t.Id); err != nil {
     return fmt.Errorf("Failed to insert into template:\n%w", err)
   }

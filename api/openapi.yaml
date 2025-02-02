@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: Phogoprint API
-  version: 1.0.0
+  version: 0.1.0
 
 servers:
   - url: http://localhost:8080
@@ -53,6 +53,41 @@ paths:
                 $ref: "#/components/schemas/Template"
         "404":
           description: Template not found
+  /template/{id}/print:
+    post:
+      summary: Print a template
+      operationId: PrintTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrintTemplateRequest"
+      responses:
+        "202":
+          description: Printer successfully printed
+        "404":
+          description: No such template
+        "422":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - reason
+                properties:
+                  reason:
+                    type: string
+                    example: Missing parameter "address"
+        "503":
+          description: Printer unavailable
   /printer:
     post:
       summary: Print an image directly
@@ -120,6 +155,8 @@ components:
       required:
         - name
         - landscape
+        - minSize
+        - maxSize
       properties:
         id:
           type: integer
@@ -130,6 +167,12 @@ components:
         landscape:
           type: boolean
           example: true
+        minSize:
+          type: integer
+          example: 100
+        maxSize:
+          type: integer
+          example: 200
         parameters:
           type: array
           items:
@@ -203,4 +246,25 @@ components:
         maxLength:
           type: integer
           example: 100
+    PrintTemplateRequest:
+      type: object
+      required:
+        - parameterValues
+      properties:
+        parameterValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParameterValue"
+    ParameterValue:
+      type: object
+      required:
+        - parameterName
+        - value
+      properties:
+        parameterName:
+          type: string
+          example: address
+        value:
+          type: string
+          example: 123 Fake Street
 

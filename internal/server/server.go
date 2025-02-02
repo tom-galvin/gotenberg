@@ -49,6 +49,56 @@ func (s *Server) PrintImage(ctx context.Context, request api.PrintImageRequestOb
 	}
 }
 
+func (s *Server) PrintTemplate(ctx context.Context, request api.PrintTemplateRequestObject) (api.PrintTemplateResponseObject, error) {
+	r := s.TemplateRepository
+	t, err := r.Get(request.Id)
+	if err != nil {
+		return nil, fmt.Errorf("Couldn't fetch template:\n%w", err)
+	}
+	if t == nil {
+		return api.PrintTemplate404Response{}, nil
+	}
+
+	paramsMap := make(map[string]string, len(t.Parameters))
+
+	// this part could be more clever
+	for _, param := range t.Parameters {
+		isPresent := false
+		for _, requestParam := range request.Body.ParameterValues {
+			if param.Name == requestParam.ParameterName {
+				paramsMap[param.Name] = requestParam.Value
+				isPresent = true
+				break
+			}
+		}
+		if !isPresent {
+			return api.PrintTemplate422JSONResponse{
+				Reason: fmt.Sprintf(`Missing parameter "%s"`, param.Name),
+			}, nil
+		}
+	}
+
+	img, err := template.RenderTemplate(t, paramsMap)
+	if err != nil {
+		return api.PrintTemplate422JSONResponse{
+			Reason: err.Error(),
+		}, nil
+	}
+
+	if err := s.Connection.Connect(); err != nil {
+		slog.Error("Couldn't connect to printer", "error", err)
+		return api.PrintTemplate503Response{}, nil
+	} else {
+		err = s.Connection.GetPrinter().WriteImage(img)
+		if err != nil {
+			slog.Error("Couldn't write image to printer", "error", err)
+			return api.PrintTemplate503Response{}, nil
+		}
+
+		return api.PrintTemplate202Response{}, nil
+	}
+}
+
 func (s *Server) GetPrinterInfo(ctx context.Context, request api.GetPrinterInfoRequestObject) (api.GetPrinterInfoResponseObject, error) {
 	if !s.Connection.GetPrinter().IsConnected() {
 		return api.GetPrinterInfo503Response{}, nil
