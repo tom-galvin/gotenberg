@@ -258,7 +258,7 @@ func (r *TemplateRepository) Update(tx *sql.Tx, u uuid.UUID, t *Template) error 
   if tFromDb == nil {
     return fmt.Errorf("No template with UUID %s", u.String())
   }
-	
+
 	t.Id = tFromDb.Id
 	if err := r.Multi(tx, t.Id,
 		  "DELETE FROM template_parameter WHERE template_id = ?",

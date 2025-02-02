@@ -191,11 +191,14 @@ func (s *Server) CreateOrUpdateTemplate(ctx context.Context, request api.CreateO
 
 	u, err := uuid.Parse(request.Uuid)
 	if err != nil {
-		return api.CreateOrUpdateTemplate400Response{}, nil
+		return api.CreateOrUpdateTemplate400JSONResponse("Invalid UUID"), nil
 	}
 	t, err := s.mapTemplateFromJson(request.Body)
 	if err != nil {
 		return nil, err
+	}
+	if u != t.Uuid {
+		return api.CreateOrUpdateTemplate400JSONResponse("Cannot change UUID of template"), nil
 	}
 	var exists bool
 	err = r.Transact(func(tx *sql.Tx) error {

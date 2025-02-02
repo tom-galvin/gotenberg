@@ -83,7 +83,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Uuid"
         "400":
-          description: Invalid UUID
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: string
+                example: Invalid UUID
         "404":
           description: No template found
   /template/{uuid}/print:

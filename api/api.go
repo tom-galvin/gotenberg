@@ -565,12 +565,13 @@ func (response CreateOrUpdateTemplate201JSONResponse) VisitCreateOrUpdateTemplat
 	return json.NewEncoder(w).Encode(response)
 }
 
-type CreateOrUpdateTemplate400Response struct {
-}
+type CreateOrUpdateTemplate400JSONResponse string
 
-func (response CreateOrUpdateTemplate400Response) VisitCreateOrUpdateTemplateResponse(w http.ResponseWriter) error {
+func (response CreateOrUpdateTemplate400JSONResponse) VisitCreateOrUpdateTemplateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-	return nil
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type CreateOrUpdateTemplate404Response struct {
