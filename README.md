@@ -6,11 +6,9 @@
 
 This is an interface for Phomemo T02/M02 thermal laser printers.
 
-The server is written in Go, and connects to the printer using Bluetooth Low Energy. The UI for controlling what gets printed (currently just text, hopefully more soon!) is exposed as a web interface on port 8080. The web interface does the job of rendering the data to draw to a bitmap, which is just POSTed to the server to print.
+The server is written in Go, and connects to the printer using Bluetooth Low Energy. The UI for controlling what gets printed is exposed as a web interface on port 8080. The backend has a rendering engine to draw text and images (maybe more in the future) to a bitmap, converts it into the Phomemo bitmap format, and connects and writes the image to the printer. The functionality is exposed via a JSON API, and the tool currently exposes a very simple web interface to use the API. (More functionality will be added!)
 
-The functionality is exposed via a JSON API, and the tool currently exposes a very simple web interface to use the API. (More functionality will be added!)
-
-It's currently very rough around the edges but it does work. The entire thing was originally just in JavaScript including the bluetooth stuff, but that relies on the Bluetooth Low Energy web API which doesn't have very good adoption so I'm moving it to Go. I've also never used Go before so it's more of a project for myself than anything
+It's currently very rough around the edges but it does work. The entire thing was originally just in JavaScript including the bluetooth stuff, but that relies on the Bluetooth Low Energy web API which doesn't have very good adoption so I've moved it to Go. I've also never used Go before so it's more of a project for myself than anything!
 
 ## how to use
 
