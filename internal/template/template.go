@@ -100,7 +100,6 @@ func rotate90(img image.Image) image.Image {
 }
 
 func insertParamsIntoTemplateChildText(t *Template, params map[string]string) error {
-  fmt.Println(t.Parameters[1].Name)
   for _, tp := range t.Parameters {
     if _, exists := params[tp.Name]; !exists {
       return fmt.Errorf("No value for parameter %v", tp.Name)
