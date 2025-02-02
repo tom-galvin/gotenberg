@@ -26,11 +26,9 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	si := server.Server{
-		TemplateRepository: r,
-		Connection:         conn,
-	}
-	sh := api.NewStrictHandler(&si, nil)
+	logger := slog.Default()
+	si := server.NewServer(logger.With("src", "server"), conn, r)
+	sh := api.NewStrictHandler(si, nil)
 	h := http.StripPrefix("/api", api.Handler(sh))
 
 

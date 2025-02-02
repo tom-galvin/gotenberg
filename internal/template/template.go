@@ -14,6 +14,7 @@ import (
 
 type Template struct {
 	Id               int
+	Uuid             uuid.UUID
 	Name             string
 	CreatedAt        time.Time
 	Landscape        bool

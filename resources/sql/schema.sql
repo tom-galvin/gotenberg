@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS template(
   id INTEGER PRIMARY KEY,
+  uuid TEXT NOT NULL UNIQUE CHECK (LENGTH(uuid) = 36),
   name TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL,
   landscape INT NOT NULL, -- boolean

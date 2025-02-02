@@ -16,14 +16,14 @@ func (r *TemplateRepository) Close() error {
 	return r.Db.Close()
 }
 
-func (r *TemplateRepository) readTemplateBase(id int) (*Template, error) {
+func (r *TemplateRepository) readTemplateBase(u uuid.UUID) (*Template, error) {
   row := r.Db.QueryRow(`
-    SELECT name, created_at, landscape, min_size, max_size
+    SELECT id, name, created_at, landscape, min_size, max_size
     FROM template
-    WHERE id = ?`, id)
+    WHERE uuid = ?`, u.String())
 
-  t := Template{Id: id}
-  if err := row.Scan(&t.Name, &t.CreatedAt, &t.Landscape, &t.MinSize, &t.MaxSize); err != nil {
+	t := Template{Uuid: u}
+  if err := row.Scan(&t.Id, &t.Name, &t.CreatedAt, &t.Landscape, &t.MinSize, &t.MaxSize); err != nil {
     if errors.Is(err, sql.ErrNoRows) {
       return nil, nil
     } else {
@@ -84,7 +84,7 @@ func (r *TemplateRepository) GetFont(u uuid.UUID) (*Font, error) {
 }
 
 func (r *TemplateRepository) List() ([]Template, error) {
-	rows, err := r.Db.Query(`SELECT id, name, landscape, min_size, max_size FROM template`)
+	rows, err := r.Db.Query(`SELECT uuid, id, name, landscape, min_size, max_size FROM template`)
 	if err != nil {
 		return nil, fmt.Errorf("Query execution failed:\n%w", err)
 	}
@@ -93,9 +93,11 @@ func (r *TemplateRepository) List() ([]Template, error) {
 	templates := []Template{}
   for count := 0; rows.Next(); count++ {
 		t := Template{}
-		if err := rows.Scan(&t.Id, &t.Name, &t.Landscape, &t.MinSize, &t.MaxSize); err != nil {
+		var uuidString string
+		if err := rows.Scan(&uuidString, &t.Id, &t.Name, &t.Landscape, &t.MinSize, &t.MaxSize); err != nil {
 			return nil, fmt.Errorf("row scanning failed:\n%w", err)
 		}
+		t.Uuid = uuid.MustParse(uuidString)
 		templates = append(templates, t)
 	}
 
@@ -106,8 +108,16 @@ func (r *TemplateRepository) List() ([]Template, error) {
 	return templates, nil
 }
 
-func (r *TemplateRepository) Get(id int) (*Template, error) {
-  t, err := r.readTemplateBase(id)
+func (r *TemplateRepository) Exists(u uuid.UUID) (bool, error) {
+  t, err := r.readTemplateBase(u)
+  if err != nil {
+    return false, err
+  }
+	return (t != nil), nil
+}
+
+func (r *TemplateRepository) Get(u uuid.UUID) (*Template, error) {
+  t, err := r.readTemplateBase(u)
   if err != nil {
     return nil, err
   }
@@ -121,7 +131,7 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
       (SELECT COUNT(1) FROM template_parameter WHERE template_id = ?) AS param_count,
       (SELECT COUNT(1) FROM template_image WHERE template_id = ?) AS image_count,
       (SELECT COUNT(1) FROM template_text WHERE template_id = ?) AS text_count
-    `, id, id, id)
+    `, t.Id, t.Id, t.Id)
 
   if err := row.Scan(&paramCount, &imageCount, &textCount); err != nil {
     return nil, fmt.Errorf("Failed to query template child count:\n%w", err)
@@ -131,7 +141,7 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
   if err := QueryAndScanRows(r.Db, `
     SELECT id, name, max_length
     FROM template_parameter
-    WHERE template_id = ?`, id, t.Parameters, func(r *sql.Rows, x *Parameter) error {
+    WHERE template_id = ?`, t.Id, t.Parameters, func(r *sql.Rows, x *Parameter) error {
       return r.Scan(&x.Id, &x.Name, &x.MaxLength)
     },
   ); err != nil {
@@ -142,7 +152,7 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
   if err := QueryAndScanRows(r.Db, `
     SELECT id, image, x, y, width, height
     FROM template_image
-    WHERE template_id = ?`, id, t.Images, func(r *sql.Rows, i *Image) error {
+    WHERE template_id = ?`, t.Id, t.Images, func(r *sql.Rows, i *Image) error {
       return r.Scan(&i.Id, &i.Image, &i.X, &i.Y, &i.Width, &i.Height)
     },
   ); err != nil {
@@ -154,7 +164,7 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
     SELECT t.id, t.text, t.x, t.y, t.width, t.height, t.font_size, f.uuid, f.name, f.builtin_name, f.font_data
     FROM template_text t
 		JOIN font f ON f.id = t.font_id
-    WHERE t.template_id = ?`, id, t.Texts, func(r *sql.Rows, i *Text) error {
+    WHERE t.template_id = ?`, t.Id, t.Texts, func(r *sql.Rows, i *Text) error {
 			var uuidString string
 			err := r.Scan(
 				&i.Id, &i.Text, &i.X, &i.Y, &i.Width, &i.Height, &i.FontSize,
@@ -217,11 +227,20 @@ func (r *TemplateRepository) Transact(f func(*sql.Tx) error) error {
   }
 }
 
+func (r *TemplateRepository) Multi(tx *sql.Tx, param any, qs ...string) error {
+	for n, q := range qs {
+		if _, err := tx.Exec(q, param); err != nil {
+			return fmt.Errorf("Error running statement #%d:\n%w", n+1, err)
+		}
+	}
+	return nil
+}
+
 func (r *TemplateRepository) Create(tx *sql.Tx, t *Template) error {
   row := tx.QueryRow(`
-    INSERT INTO template(name, created_at, landscape, min_size, max_size)
-    VALUES (?, ?, ?, ?, ?)
-    RETURNING id`, t.Name, t.CreatedAt, t.Landscape, t.MinSize, t.MaxSize)
+    INSERT INTO template(uuid, name, created_at, landscape, min_size, max_size)
+    VALUES (?, ?, ?, ?, ?, ?)
+    RETURNING id`, t.Uuid.String(), t.Name, t.CreatedAt, t.Landscape, t.MinSize, t.MaxSize)
   if err := row.Scan(&t.Id); err != nil {
     return fmt.Errorf("Failed to insert into template:\n%w", err)
   }
@@ -231,25 +250,28 @@ func (r *TemplateRepository) Create(tx *sql.Tx, t *Template) error {
   return nil
 }
 
-func (r *TemplateRepository) Update(tx *sql.Tx, id int, t *Template) error {
-  tFromDb, err := r.readTemplateBase(id)
+func (r *TemplateRepository) Update(tx *sql.Tx, u uuid.UUID, t *Template) error {
+  tFromDb, err := r.readTemplateBase(t.Uuid)
   if err != nil {
     return err
   }
   if tFromDb == nil {
-    return fmt.Errorf("No template with id %v", id)
+    return fmt.Errorf("No template with UUID %s", u.String())
   }
-  _, err = tx.Exec(`
-    DELETE FROM template_parameter WHERE template_id = ?;
-    DELETE FROM template_image WHERE template_id = ?;
-    DELETE FROM template_text WHERE template_id = ?;
-    UPDATE template SET name = ?, landscape = ? WHERE id = ?`,
-    id, id, id,
-    t.Name, t.Landscape, id)
+	
+	t.Id = tFromDb.Id
+	if err := r.Multi(tx, t.Id,
+		  "DELETE FROM template_parameter WHERE template_id = ?",
+      "DELETE FROM template_image WHERE template_id = ?",
+      "DELETE FROM template_text WHERE template_id = ?"); err != nil {
+		return err
+  }
+
+  _, err = tx.Exec(`UPDATE template SET name = ?, landscape = ? WHERE id = ?`,
+    t.Name, t.Landscape, t.Id)
   if err != nil {
     return fmt.Errorf("Couldn't update template data:\n%w", err)
   }
-  t.Id = id
   if err := r.insertChildren(tx, t); err != nil {
     return err
   }

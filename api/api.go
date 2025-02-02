@@ -63,7 +63,6 @@ type PrintTemplateRequest struct {
 
 // Template defines model for Template.
 type Template struct {
-	Id         *int                 `json:"id,omitempty"`
 	Images     *[]TemplateImage     `json:"images,omitempty"`
 	Landscape  bool                 `json:"landscape"`
 	MaxSize    int                  `json:"maxSize"`
@@ -71,6 +70,7 @@ type Template struct {
 	Name       string               `json:"name"`
 	Parameters *[]TemplateParameter `json:"parameters,omitempty"`
 	Texts      *[]TemplateText      `json:"texts,omitempty"`
+	Uuid       Uuid                 `json:"uuid"`
 }
 
 // TemplateImage defines model for TemplateImage.
@@ -115,8 +115,8 @@ type PrintImageJSONBody struct {
 // PrintImageJSONRequestBody defines body for PrintImage for application/json ContentType.
 type PrintImageJSONRequestBody PrintImageJSONBody
 
-// CreateTemplateJSONRequestBody defines body for CreateTemplate for application/json ContentType.
-type CreateTemplateJSONRequestBody = Template
+// CreateOrUpdateTemplateJSONRequestBody defines body for CreateOrUpdateTemplate for application/json ContentType.
+type CreateOrUpdateTemplateJSONRequestBody = Template
 
 // PrintTemplateJSONRequestBody defines body for PrintTemplate for application/json ContentType.
 type PrintTemplateJSONRequestBody = PrintTemplateRequest
@@ -135,15 +135,15 @@ type ServerInterface interface {
 	// List templates
 	// (GET /template)
 	ListTemplate(w http.ResponseWriter, r *http.Request)
-	// Create a new template
-	// (POST /template)
-	CreateTemplate(w http.ResponseWriter, r *http.Request)
 	// Get a single template
-	// (GET /template/{id})
-	GetTemplate(w http.ResponseWriter, r *http.Request, id int)
+	// (GET /template/{uuid})
+	GetTemplate(w http.ResponseWriter, r *http.Request, uuid Uuid)
+	// Create a new template, or update an existing one
+	// (PUT /template/{uuid})
+	CreateOrUpdateTemplate(w http.ResponseWriter, r *http.Request, uuid Uuid)
 	// Print a template
-	// (POST /template/{id}/print)
-	PrintTemplate(w http.ResponseWriter, r *http.Request, id int)
+	// (POST /template/{uuid}/print)
+	PrintTemplate(w http.ResponseWriter, r *http.Request, uuid Uuid)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -211,11 +211,22 @@ func (siw *ServerInterfaceWrapper) ListTemplate(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
-// CreateTemplate operation middleware
-func (siw *ServerInterfaceWrapper) CreateTemplate(w http.ResponseWriter, r *http.Request) {
+// GetTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "uuid" -------------
+	var uuid Uuid
+
+	err = runtime.BindStyledParameterWithOptions("simple", "uuid", r.PathValue("uuid"), &uuid, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "uuid", Err: err})
+		return
+	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateTemplate(w, r)
+		siw.Handler.GetTemplate(w, r, uuid)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -225,22 +236,22 @@ func (siw *ServerInterfaceWrapper) CreateTemplate(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
-// GetTemplate operation middleware
-func (siw *ServerInterfaceWrapper) GetTemplate(w http.ResponseWriter, r *http.Request) {
+// CreateOrUpdateTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateOrUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
-	// ------------- Path parameter "id" -------------
-	var id int
+	// ------------- Path parameter "uuid" -------------
+	var uuid Uuid
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "uuid", r.PathValue("uuid"), &uuid, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "uuid", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetTemplate(w, r, id)
+		siw.Handler.CreateOrUpdateTemplate(w, r, uuid)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -255,17 +266,17 @@ func (siw *ServerInterfaceWrapper) PrintTemplate(w http.ResponseWriter, r *http.
 
 	var err error
 
-	// ------------- Path parameter "id" -------------
-	var id int
+	// ------------- Path parameter "uuid" -------------
+	var uuid Uuid
 
-	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "uuid", r.PathValue("uuid"), &uuid, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "uuid", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PrintTemplate(w, r, id)
+		siw.Handler.PrintTemplate(w, r, uuid)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -399,9 +410,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/printer", wrapper.PrintImage)
 	m.HandleFunc("GET "+options.BaseURL+"/printer/info", wrapper.GetPrinterInfo)
 	m.HandleFunc("GET "+options.BaseURL+"/template", wrapper.ListTemplate)
-	m.HandleFunc("POST "+options.BaseURL+"/template", wrapper.CreateTemplate)
-	m.HandleFunc("GET "+options.BaseURL+"/template/{id}", wrapper.GetTemplate)
-	m.HandleFunc("POST "+options.BaseURL+"/template/{id}/print", wrapper.PrintTemplate)
+	m.HandleFunc("GET "+options.BaseURL+"/template/{uuid}", wrapper.GetTemplate)
+	m.HandleFunc("PUT "+options.BaseURL+"/template/{uuid}", wrapper.CreateOrUpdateTemplate)
+	m.HandleFunc("POST "+options.BaseURL+"/template/{uuid}/print", wrapper.PrintTemplate)
 
 	return m
 }
@@ -494,32 +505,8 @@ func (response ListTemplate200JSONResponse) VisitListTemplateResponse(w http.Res
 	return json.NewEncoder(w).Encode(response)
 }
 
-type CreateTemplateRequestObject struct {
-	Body *CreateTemplateJSONRequestBody
-}
-
-type CreateTemplateResponseObject interface {
-	VisitCreateTemplateResponse(w http.ResponseWriter) error
-}
-
-type CreateTemplate201Response struct {
-}
-
-func (response CreateTemplate201Response) VisitCreateTemplateResponse(w http.ResponseWriter) error {
-	w.WriteHeader(201)
-	return nil
-}
-
-type CreateTemplate404Response struct {
-}
-
-func (response CreateTemplate404Response) VisitCreateTemplateResponse(w http.ResponseWriter) error {
-	w.WriteHeader(404)
-	return nil
-}
-
 type GetTemplateRequestObject struct {
-	Id int `json:"id"`
+	Uuid Uuid `json:"uuid"`
 }
 
 type GetTemplateResponseObject interface {
@@ -535,6 +522,14 @@ func (response GetTemplate200JSONResponse) VisitGetTemplateResponse(w http.Respo
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetTemplate400Response struct {
+}
+
+func (response GetTemplate400Response) VisitGetTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
 type GetTemplate404Response struct {
 }
 
@@ -543,8 +538,51 @@ func (response GetTemplate404Response) VisitGetTemplateResponse(w http.ResponseW
 	return nil
 }
 
+type CreateOrUpdateTemplateRequestObject struct {
+	Uuid Uuid `json:"uuid"`
+	Body *CreateOrUpdateTemplateJSONRequestBody
+}
+
+type CreateOrUpdateTemplateResponseObject interface {
+	VisitCreateOrUpdateTemplateResponse(w http.ResponseWriter) error
+}
+
+type CreateOrUpdateTemplate200JSONResponse Uuid
+
+func (response CreateOrUpdateTemplate200JSONResponse) VisitCreateOrUpdateTemplateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateOrUpdateTemplate201JSONResponse Uuid
+
+func (response CreateOrUpdateTemplate201JSONResponse) VisitCreateOrUpdateTemplateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateOrUpdateTemplate400Response struct {
+}
+
+func (response CreateOrUpdateTemplate400Response) VisitCreateOrUpdateTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
+	return nil
+}
+
+type CreateOrUpdateTemplate404Response struct {
+}
+
+func (response CreateOrUpdateTemplate404Response) VisitCreateOrUpdateTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
 type PrintTemplateRequestObject struct {
-	Id   int `json:"id"`
+	Uuid Uuid `json:"uuid"`
 	Body *PrintTemplateJSONRequestBody
 }
 
@@ -557,6 +595,14 @@ type PrintTemplate202Response struct {
 
 func (response PrintTemplate202Response) VisitPrintTemplateResponse(w http.ResponseWriter) error {
 	w.WriteHeader(202)
+	return nil
+}
+
+type PrintTemplate400Response struct {
+}
+
+func (response PrintTemplate400Response) VisitPrintTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(400)
 	return nil
 }
 
@@ -601,14 +647,14 @@ type StrictServerInterface interface {
 	// List templates
 	// (GET /template)
 	ListTemplate(ctx context.Context, request ListTemplateRequestObject) (ListTemplateResponseObject, error)
-	// Create a new template
-	// (POST /template)
-	CreateTemplate(ctx context.Context, request CreateTemplateRequestObject) (CreateTemplateResponseObject, error)
 	// Get a single template
-	// (GET /template/{id})
+	// (GET /template/{uuid})
 	GetTemplate(ctx context.Context, request GetTemplateRequestObject) (GetTemplateResponseObject, error)
+	// Create a new template, or update an existing one
+	// (PUT /template/{uuid})
+	CreateOrUpdateTemplate(ctx context.Context, request CreateOrUpdateTemplateRequestObject) (CreateOrUpdateTemplateResponseObject, error)
 	// Print a template
-	// (POST /template/{id}/print)
+	// (POST /template/{uuid}/print)
 	PrintTemplate(ctx context.Context, request PrintTemplateRequestObject) (PrintTemplateResponseObject, error)
 }
 
@@ -744,42 +790,11 @@ func (sh *strictHandler) ListTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// CreateTemplate operation middleware
-func (sh *strictHandler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
-	var request CreateTemplateRequestObject
-
-	var body CreateTemplateJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateTemplate(ctx, request.(CreateTemplateRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateTemplate")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateTemplateResponseObject); ok {
-		if err := validResponse.VisitCreateTemplateResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // GetTemplate operation middleware
-func (sh *strictHandler) GetTemplate(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) GetTemplate(w http.ResponseWriter, r *http.Request, uuid Uuid) {
 	var request GetTemplateRequestObject
 
-	request.Id = id
+	request.Uuid = uuid
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetTemplate(ctx, request.(GetTemplateRequestObject))
@@ -801,11 +816,44 @@ func (sh *strictHandler) GetTemplate(w http.ResponseWriter, r *http.Request, id 
 	}
 }
 
+// CreateOrUpdateTemplate operation middleware
+func (sh *strictHandler) CreateOrUpdateTemplate(w http.ResponseWriter, r *http.Request, uuid Uuid) {
+	var request CreateOrUpdateTemplateRequestObject
+
+	request.Uuid = uuid
+
+	var body CreateOrUpdateTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateOrUpdateTemplate(ctx, request.(CreateOrUpdateTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateOrUpdateTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateOrUpdateTemplateResponseObject); ok {
+		if err := validResponse.VisitCreateOrUpdateTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PrintTemplate operation middleware
-func (sh *strictHandler) PrintTemplate(w http.ResponseWriter, r *http.Request, id int) {
+func (sh *strictHandler) PrintTemplate(w http.ResponseWriter, r *http.Request, uuid Uuid) {
 	var request PrintTemplateRequestObject
 
-	request.Id = id
+	request.Uuid = uuid
 
 	var body PrintTemplateJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

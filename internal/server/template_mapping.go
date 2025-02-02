@@ -12,7 +12,7 @@ import (
 
 func mapTemplateToJson(t *template.Template) *api.Template {
 	j := api.Template{
-		Id: &t.Id,
+		Uuid: t.Uuid.String(),
 		Name: t.Name,
 		Landscape: t.Landscape,
 		MinSize: t.MinSize,
@@ -40,8 +40,12 @@ func mapTemplateToJson(t *template.Template) *api.Template {
 }
 
 func (s *Server) mapTemplateFromJson(j *api.Template) (*template.Template, error) {
+	uuid, err := uuid.Parse(j.Uuid)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid UUID:\n%w", err)
+	}
 	t := template.Template{
-		Id: 0,
+		Uuid: uuid,
 		Name: j.Name,
 		CreatedAt: time.Now(),
 		Landscape: j.Landscape,
@@ -123,7 +127,7 @@ func (s *Server) mapTextFromJson(src *api.TemplateText, dest *template.Text) err
 		return fmt.Errorf("Couldn't load font:\n%w", err)
 	}
 	if f == nil {
-		return fmt.Errorf("Font UUID does not exist:\n%w", f)
+		return fmt.Errorf("Font UUID does not exist: %s", src.FontUuid)
 	}
 
 	dest.Font = *f
