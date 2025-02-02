@@ -8,20 +8,6 @@ servers:
 
 paths:
   /template:
-    post:
-      summary: Create a new template
-      operationId: CreateTemplate
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Template"
-      responses:
-        "201":
-          description: Template created successfully
-        "404":
-          description: No template found
     get:
       summary: List templates
       operationId: ListTemplate
@@ -40,23 +26,23 @@ paths:
       operationId: ListFont
       responses:
         "200":
-          description: The fonts
+          description: All available fonts
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Font"
-  /template/{id}:
+  /template/{uuid}:
     get:
       summary: Get a single template
       operationId: GetTemplate
       parameters:
-        - name: id
+        - name: uuid
           in: path
           required: true
           schema:
-            type: integer
+            $ref: "#/components/schemas/Uuid"
       responses:
         "200":
           description: The template
@@ -64,18 +50,57 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Template"
+        "400":
+          description: Invalid UUID
         "404":
           description: Template not found
-  /template/{id}/print:
+    put:
+      summary: Create a new template, or update an existing one
+      operationId: CreateOrUpdateTemplate
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Template"
+      responses:
+        "200":
+          description: Template updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Uuid"
+        "201":
+          description: Template created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Uuid"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                type: string
+                example: Invalid UUID
+        "404":
+          description: No template found
+  /template/{uuid}/print:
     post:
       summary: Print a template
       operationId: PrintTemplate
       parameters:
-        - name: id
+        - name: uuid
           in: path
           required: true
           schema:
-            type: integer
+            $ref: "#/components/schemas/Uuid"
       requestBody:
         required: true
         content:
@@ -85,6 +110,8 @@ paths:
       responses:
         "202":
           description: Printer successfully printed
+        "400":
+          description: Invalid UUID
         "404":
           description: No such template
         "422":
@@ -166,14 +193,14 @@ components:
     Template:
       type: object
       required:
+        - uuid
         - name
         - landscape
         - minSize
         - maxSize
       properties:
-        id:
-          type: integer
-          example: 1
+        uuid:
+          $ref: "#/components/schemas/Uuid"
         name:
           type: string
           example: Postage Label

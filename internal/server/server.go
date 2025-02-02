@@ -11,6 +11,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
+	"github.com/google/uuid"
 	"tomgalvin.uk/phogoprint/api"
 	"tomgalvin.uk/phogoprint/internal/printer"
 	"tomgalvin.uk/phogoprint/internal/template"
@@ -19,8 +20,17 @@ import (
 var _ api.StrictServerInterface = (*Server)(nil)
 
 type Server struct {
+	Log                *slog.Logger
 	Connection         printer.Connection
 	TemplateRepository *template.TemplateRepository
+}
+
+func NewServer(log *slog.Logger, conn printer.Connection, repo *template.TemplateRepository) *Server {
+	return &Server{
+		Log: log,
+		Connection: conn,
+		TemplateRepository: repo,
+	}
 }
 
 func (s *Server) PrintImage(ctx context.Context, request api.PrintImageRequestObject) (api.PrintImageResponseObject, error) {
@@ -36,12 +46,12 @@ func (s *Server) PrintImage(ctx context.Context, request api.PrintImageRequestOb
 	fmt.Printf("Received %s image\n", format)
 
 	if err := s.Connection.Connect(); err != nil {
-		slog.Error("Couldn't connect to printer", "error", err)
+		s.Log.Error("Couldn't connect to printer", "error", err)
 		return api.PrintImage503Response{}, nil
 	} else {
 		err = s.Connection.GetPrinter().WriteImage(image)
 		if err != nil {
-			slog.Error("Couldn't write image to printer", "error", err)
+			s.Log.Error("Couldn't write image to printer", "error", err)
 			return api.PrintImage503Response{}, nil
 		}
 
@@ -51,7 +61,11 @@ func (s *Server) PrintImage(ctx context.Context, request api.PrintImageRequestOb
 
 func (s *Server) PrintTemplate(ctx context.Context, request api.PrintTemplateRequestObject) (api.PrintTemplateResponseObject, error) {
 	r := s.TemplateRepository
-	t, err := r.Get(request.Id)
+	u, err := uuid.Parse(request.Uuid)
+	if err != nil {
+		return api.PrintTemplate400Response{}, nil
+	}
+	t, err := r.Get(u)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't fetch template:\n%w", err)
 	}
@@ -86,12 +100,12 @@ func (s *Server) PrintTemplate(ctx context.Context, request api.PrintTemplateReq
 	}
 
 	if err := s.Connection.Connect(); err != nil {
-		slog.Error("Couldn't connect to printer", "error", err)
+		s.Log.Error("Couldn't connect to printer", "error", err)
 		return api.PrintTemplate503Response{}, nil
 	} else {
 		err = s.Connection.GetPrinter().WriteImage(img)
 		if err != nil {
-			slog.Error("Couldn't write image to printer", "error", err)
+			s.Log.Error("Couldn't write image to printer", "error", err)
 			return api.PrintTemplate503Response{}, nil
 		}
 
@@ -144,7 +158,12 @@ func mapDeviceStateToJson(s printer.DeviceState) api.DeviceState {
 
 func (s *Server) GetTemplate(ctx context.Context, request api.GetTemplateRequestObject) (api.GetTemplateResponseObject, error) {
 	r := s.TemplateRepository
-	t, err := r.Get(request.Id)
+
+	u, err := uuid.Parse(request.Uuid)
+	if err != nil {
+		return api.GetTemplate400Response{}, nil
+	}
+	t, err := r.Get(u)
 	if err != nil {
 		return nil, fmt.Errorf("Couldn't fetch template:\n%w", err)
 	}
@@ -167,18 +186,40 @@ func (s *Server) ListTemplate(ctx context.Context, request api.ListTemplateReque
 	return api.ListTemplate200JSONResponse(tsJson), nil
 }
 
-func (s *Server) CreateTemplate(ctx context.Context, request api.CreateTemplateRequestObject) (api.CreateTemplateResponseObject, error) {
+func (s *Server) CreateOrUpdateTemplate(ctx context.Context, request api.CreateOrUpdateTemplateRequestObject) (api.CreateOrUpdateTemplateResponseObject, error) {
 	r := s.TemplateRepository
 
+	u, err := uuid.Parse(request.Uuid)
+	if err != nil {
+		return api.CreateOrUpdateTemplate400JSONResponse("Invalid UUID"), nil
+	}
 	t, err := s.mapTemplateFromJson(request.Body)
 	if err != nil {
 		return nil, err
 	}
+	if u != t.Uuid {
+		return api.CreateOrUpdateTemplate400JSONResponse("Cannot change UUID of template"), nil
+	}
+	var exists bool
 	err = r.Transact(func(tx *sql.Tx) error {
-		return r.Create(tx, t)
+		if exists, err = r.Exists(u); err == nil {
+			if exists {
+				s.Log.Info("Updating template", "uuid", request.Uuid)
+				return r.Update(tx, u, t)
+			} else {
+				s.Log.Info("Creating template", "uuid", request.Uuid)
+				return r.Create(tx, t)
+			}
+		} else {
+			return err
+		}
 	})
 	if err != nil {
 		return nil, err
 	}
-	return api.CreateTemplate201Response{}, nil
+	if exists {
+		return api.CreateOrUpdateTemplate200JSONResponse(request.Uuid), nil
+	} else {
+		return api.CreateOrUpdateTemplate201JSONResponse(request.Uuid), nil
+	}
 }
