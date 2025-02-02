@@ -4,7 +4,7 @@
   <img src="docs/img/phogoprint-small.png" />
 </p>
 
-This is an interface for Phonemo T02/M02 thermal laser printers.
+This is an interface for Phomemo T02/M02 thermal laser printers.
 
 The server is written in Go, and connects to the printer using Bluetooth Low Energy. The UI for controlling what gets printed (currently just text, hopefully more soon!) is exposed as a web interface on port 8080. The web interface does the job of rendering the data to draw to a bitmap, which is just POSTed to the server to print.
 
