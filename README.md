@@ -1,5 +1,3 @@
-# phogoprint
-
 <p align="center">
   <img src="docs/img/phogoprint-large.png" />
 </p>
