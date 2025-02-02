@@ -38,6 +38,12 @@ type DeviceInfo struct {
 // DeviceState defines model for DeviceState.
 type DeviceState string
 
+// Font defines model for Font.
+type Font struct {
+	Name string `json:"name"`
+	Uuid Uuid   `json:"uuid"`
+}
+
 // ParameterValue defines model for ParameterValue.
 type ParameterValue struct {
 	ParameterName string `json:"parameterName"`
@@ -79,17 +85,26 @@ type TemplateImage struct {
 
 // TemplateParameter defines model for TemplateParameter.
 type TemplateParameter struct {
-	MaxLength int    `json:"maxLength"`
+	MaxLength *int   `json:"maxLength,omitempty"`
 	Name      string `json:"name"`
 }
 
 // TemplateText defines model for TemplateText.
 type TemplateText struct {
+	FontSize int  `json:"fontSize"`
+	FontUuid Uuid `json:"fontUuid"`
+
+	// Height The max allowed height of the text. This is required if the template is landscape (landscape = `true`)
 	Height   *int     `json:"height,omitempty"`
 	Position Position `json:"position"`
 	Text     string   `json:"text"`
-	Width    *int     `json:"width,omitempty"`
+
+	// Width The max allowed width of the text. This is required if the template is portrait (landscape = `false`)
+	Width *int `json:"width,omitempty"`
 }
+
+// Uuid defines model for Uuid.
+type Uuid = string
 
 // PrintImageJSONBody defines parameters for PrintImage.
 type PrintImageJSONBody struct {
@@ -108,6 +123,9 @@ type PrintTemplateJSONRequestBody = PrintTemplateRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// List fonts
+	// (GET /font)
+	ListFont(w http.ResponseWriter, r *http.Request)
 	// Print an image directly
 	// (POST /printer)
 	PrintImage(w http.ResponseWriter, r *http.Request)
@@ -136,6 +154,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListFont operation middleware
+func (siw *ServerInterfaceWrapper) ListFont(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFont(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // PrintImage operation middleware
 func (siw *ServerInterfaceWrapper) PrintImage(w http.ResponseWriter, r *http.Request) {
@@ -363,6 +395,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc("GET "+options.BaseURL+"/font", wrapper.ListFont)
 	m.HandleFunc("POST "+options.BaseURL+"/printer", wrapper.PrintImage)
 	m.HandleFunc("GET "+options.BaseURL+"/printer/info", wrapper.GetPrinterInfo)
 	m.HandleFunc("GET "+options.BaseURL+"/template", wrapper.ListTemplate)
@@ -371,6 +404,22 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/template/{id}/print", wrapper.PrintTemplate)
 
 	return m
+}
+
+type ListFontRequestObject struct {
+}
+
+type ListFontResponseObject interface {
+	VisitListFontResponse(w http.ResponseWriter) error
+}
+
+type ListFont200JSONResponse []Font
+
+func (response ListFont200JSONResponse) VisitListFontResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type PrintImageRequestObject struct {
@@ -540,6 +589,9 @@ func (response PrintTemplate503Response) VisitPrintTemplateResponse(w http.Respo
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// List fonts
+	// (GET /font)
+	ListFont(ctx context.Context, request ListFontRequestObject) (ListFontResponseObject, error)
 	// Print an image directly
 	// (POST /printer)
 	PrintImage(ctx context.Context, request PrintImageRequestObject) (PrintImageResponseObject, error)
@@ -587,6 +639,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListFont operation middleware
+func (sh *strictHandler) ListFont(w http.ResponseWriter, r *http.Request) {
+	var request ListFontRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFont(ctx, request.(ListFontRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFont")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFontResponseObject); ok {
+		if err := validResponse.VisitListFontResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // PrintImage operation middleware

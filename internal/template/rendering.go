@@ -34,7 +34,7 @@ func wrapText(text string, maxWidth int, face font.Face) []string {
 
 		// Measure text width
 		width := font.MeasureString(face, testLine).Ceil()
-		if width > maxWidth && len(line) > 0 {
+		if width > maxWidth && len(line) > 0 && maxWidth > 0 {
 			lines = append(lines, line)
 			line = word
 		} else {
@@ -81,8 +81,6 @@ func measureAndDrawChildText(text *Text, i *image.RGBA64) Measure {
     for _, line := range wrappedText {
       d.Dot.X = fixed.I(m.X)
       d.Dot.Y += text.FontFace.Metrics().Ascent
-      fmt.Println(line)
-      fmt.Println(d.Dot)
       d.DrawString(line)
       d.Dot.Y += text.FontFace.Metrics().Descent
     }

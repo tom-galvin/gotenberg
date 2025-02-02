@@ -99,6 +99,19 @@ func (s *Server) PrintTemplate(ctx context.Context, request api.PrintTemplateReq
 	}
 }
 
+func (s *Server) ListFont(ctx context.Context, request api.ListFontRequestObject) (api.ListFontResponseObject, error) {
+	fs, err := s.TemplateRepository.ListFonts()
+	if err != nil {
+		panic(err)
+	}
+	fsJson := make([]api.Font, len(fs))
+	for i := 0; i < len(fs); i++ {
+		fsJson[i].Name = fs[i].Name
+		fsJson[i].Uuid = fs[i].Uuid.String()
+	}
+	return api.ListFont200JSONResponse(fsJson), nil
+}
+
 func (s *Server) GetPrinterInfo(ctx context.Context, request api.GetPrinterInfoRequestObject) (api.GetPrinterInfoResponseObject, error) {
 	if !s.Connection.GetPrinter().IsConnected() {
 		return api.GetPrinterInfo503Response{}, nil
@@ -157,7 +170,7 @@ func (s *Server) ListTemplate(ctx context.Context, request api.ListTemplateReque
 func (s *Server) CreateTemplate(ctx context.Context, request api.CreateTemplateRequestObject) (api.CreateTemplateResponseObject, error) {
 	r := s.TemplateRepository
 
-	t, err := mapTemplateFromJson(request.Body)
+	t, err := s.mapTemplateFromJson(request.Body)
 	if err != nil {
 		return nil, err
 	}

@@ -107,7 +107,7 @@ document.getElementById("idButton").onclick = async() => {
   await printCanvas();
 };
 
-const batteryInterval = setInterval(updateBatteryLevel, 1000);
+const batteryInterval = setInterval(updateBatteryLevel, 100000);
 
 document.addEventListener("DOMContentLoaded", updateBatteryLevel);
 

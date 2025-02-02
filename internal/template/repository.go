@@ -1,9 +1,11 @@
 package template
 
 import (
-  "database/sql"
-  "errors"
-  "fmt"
+	"database/sql"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
 )
 
 type TemplateRepository struct {
@@ -32,8 +34,57 @@ func (r *TemplateRepository) readTemplateBase(id int) (*Template, error) {
   return &t, nil
 }
 
+func (r *TemplateRepository) ListFonts() ([]Font, error) {
+	rows, err := r.Db.Query(`
+	  SELECT uuid, name, builtin_name, font_data
+		FROM font`)
+
+	if err != nil {
+		return nil, fmt.Errorf("Query execution failed:\n%w", err)
+	}
+	defer rows.Close()
+
+	fonts := []Font{}
+  for count := 0; rows.Next(); count++ {
+		f := Font{}
+		var uuidString string
+		if err := rows.Scan(&uuidString, &f.Name, &f.BuiltinName, &f.FontData); err != nil {
+			return nil, fmt.Errorf("Row scanning failed:\n%w", err)
+		}
+		f.Uuid = uuid.MustParse(uuidString)
+		fonts = append(fonts, f)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Error iterating rows:\n%w", err)
+	}
+
+	return fonts, nil
+}
+
+func (r *TemplateRepository) GetFont(u uuid.UUID) (*Font, error) {
+	row := r.Db.QueryRow(`
+	  SELECT uuid, name, builtin_name, font_data
+		FROM font
+		WHERE uuid = ?`, u.String())
+
+	var f Font
+
+	var uuidString string
+	if err := row.Scan(&uuidString, &f.Name, &f.BuiltinName, &f.FontData); err != nil {
+    if errors.Is(err, sql.ErrNoRows) {
+      return nil, nil
+    } else {
+      return nil, fmt.Errorf("Failed to read font:\n%w", err)
+    }
+	}
+	f.Uuid = uuid.MustParse(uuidString)
+
+	return &f, nil
+}
+
 func (r *TemplateRepository) List() ([]Template, error) {
-	rows, err := r.Db.Query(`SELECT id, name, landscape FROM template`)
+	rows, err := r.Db.Query(`SELECT id, name, landscape, min_size, max_size FROM template`)
 	if err != nil {
 		return nil, fmt.Errorf("Query execution failed:\n%w", err)
 	}
@@ -42,7 +93,7 @@ func (r *TemplateRepository) List() ([]Template, error) {
 	templates := []Template{}
   for count := 0; rows.Next(); count++ {
 		t := Template{}
-		if err := rows.Scan(&t.Id, &t.Name, &t.Landscape); err != nil {
+		if err := rows.Scan(&t.Id, &t.Name, &t.Landscape, &t.MinSize, &t.MaxSize); err != nil {
 			return nil, fmt.Errorf("row scanning failed:\n%w", err)
 		}
 		templates = append(templates, t)
@@ -100,10 +151,16 @@ func (r *TemplateRepository) Get(id int) (*Template, error) {
 
   t.Texts = make([]Text, textCount)
   if err := QueryAndScanRows(r.Db, `
-    SELECT id, text, x, y, width, height
-    FROM template_text
-    WHERE template_id = ?`, id, t.Texts, func(r *sql.Rows, i *Text) error {
-      return r.Scan(&i.Id, &i.Text, &i.X, &i.Y, &i.Width, &i.Height)
+    SELECT t.id, t.text, t.x, t.y, t.width, t.height, t.font_size, f.uuid, f.name, f.builtin_name, f.font_data
+    FROM template_text t
+		JOIN font f ON f.id = t.font_id
+    WHERE t.template_id = ?`, id, t.Texts, func(r *sql.Rows, i *Text) error {
+			var uuidString string
+			err := r.Scan(
+				&i.Id, &i.Text, &i.X, &i.Y, &i.Width, &i.Height, &i.FontSize,
+				&uuidString, &i.Font.Name, &i.Font.BuiltinName, &i.Font.FontData)
+			i.Font.Uuid = uuid.MustParse(uuidString)
+			return err
     },
   ); err != nil {
     return nil, fmt.Errorf("Failed to read child texts for image:\n%w", err)
@@ -170,7 +227,6 @@ func (r *TemplateRepository) Create(tx *sql.Tx, t *Template) error {
   }
 
   r.insertChildren(tx, t)
-	fmt.Println(t.Id)
 
   return nil
 }
@@ -236,8 +292,8 @@ func (r *TemplateRepository) insertChildren(tx *sql.Tx, t *Template) error {
   }
 
   tStmt, err := tx.Prepare(`
-    INSERT INTO template_text(template_id, text, x, y, width, height)
-    VALUES (?, ?, ?, ?, ?, ?)`)
+    INSERT INTO template_text(template_id, text, x, y, width, height, font_size, font_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT id FROM font WHERE uuid = ?))`)
   if err != nil {
     return fmt.Errorf("Failed to prepare statement to insert template text:\n%w", err)
   }
@@ -248,6 +304,8 @@ func (r *TemplateRepository) insertChildren(tx *sql.Tx, t *Template) error {
       txt.X, txt.Y,
       txt.Width,
       txt.Height,
+			txt.FontSize,
+			txt.Font.Uuid.String(),
     )
     if err != nil {
       return fmt.Errorf("Failed to insert parameter %v of text:\n%w", i, err)
