@@ -34,7 +34,7 @@ func wrapText(text string, maxWidth int, face font.Face) []string {
 
 		// Measure text width
 		width := font.MeasureString(face, testLine).Ceil()
-		if width > maxWidth && len(line) > 0 {
+		if width > maxWidth && len(line) > 0 && maxWidth > 0 {
 			lines = append(lines, line)
 			line = word
 		} else {

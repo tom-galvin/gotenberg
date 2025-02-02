@@ -27,13 +27,26 @@ paths:
       operationId: ListTemplate
       responses:
         "200":
-          description: The template
+          description: All templates
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/Template"
+  /font:
+    get:
+      summary: List fonts
+      operationId: ListFont
+      responses:
+        "200":
+          description: The fonts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Font"
   /template/{id}:
     get:
       summary: Get a single template
@@ -210,6 +223,8 @@ components:
       required:
         - text
         - position
+        - fontUuid
+        - fontSize
       properties:
         text:
           type: string
@@ -218,10 +233,17 @@ components:
           $ref: "#/components/schemas/Position"
         width:
           type: integer
+          description: The max allowed width of the text. This is required if the template is portrait (landscape = `false`)
           example: 100
         height:
           type: integer
+          description: The max allowed height of the text. This is required if the template is landscape (landscape = `true`)
           example: 100
+        fontUuid:
+          $ref: "#/components/schemas/Uuid"
+        fontSize:
+          type: integer
+          example: 20
     Position:
       type: object
       required:
@@ -267,4 +289,18 @@ components:
         value:
           type: string
           example: 123 Fake Street
-
+    Uuid:
+      type: string
+      pattern: '^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$'
+      example: 4d98c9b6-8bb5-492d-9789-a2bb5ea8ab21
+    Font:
+      type: object
+      required:
+        - uuid
+        - name
+      properties:
+        uuid:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+          example: Go Regular

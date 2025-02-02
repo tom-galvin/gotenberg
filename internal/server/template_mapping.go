@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/base64"
+	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"tomgalvin.uk/phogoprint/api"
 	"tomgalvin.uk/phogoprint/internal/template"
 )
@@ -37,7 +39,7 @@ func mapTemplateToJson(t *template.Template) *api.Template {
 	return &j
 }
 
-func mapTemplateFromJson(j *api.Template) (*template.Template, error) {
+func (s *Server) mapTemplateFromJson(j *api.Template) (*template.Template, error) {
 	t := template.Template{
 		Id: 0,
 		Name: j.Name,
@@ -56,7 +58,9 @@ func mapTemplateFromJson(j *api.Template) (*template.Template, error) {
 	if j.Texts != nil {
 		t.Texts = make([]template.Text, len(*j.Texts))
 		for i := 0; i < len(t.Texts); i++ {
-			mapTextFromJson(&(*j.Texts)[i], &t.Texts[i])
+			if err := s.mapTextFromJson(&(*j.Texts)[i], &t.Texts[i]); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if j.Images != nil {
@@ -85,24 +89,43 @@ func mapTextToJson(src *template.Text, dest *api.TemplateText) {
 	dest.Text = src.Text
 	dest.Position.X = src.X
 	dest.Position.Y = src.Y
+	dest.FontSize = src.FontSize
 	if src.Width > 0 {
 		dest.Width = &src.Width
 	}
 	if src.Height > 0 {
 		dest.Height = &src.Height
 	}
+	dest.FontUuid = src.Font.Uuid.String()
 }
 
-func mapTextFromJson(src *api.TemplateText, dest *template.Text) {
+func (s *Server) mapTextFromJson(src *api.TemplateText, dest *template.Text) error {
 	dest.Text = src.Text
 	dest.X = src.Position.X
 	dest.Y = src.Position.Y
+	dest.FontSize = src.FontSize
 	if src.Width != nil {
 		dest.Width = *src.Width
 	}
 	if src.Height != nil {
 		dest.Height = *src.Height
 	}
+
+	fontUuid, err := uuid.Parse(src.FontUuid)
+	if err != nil {
+		return fmt.Errorf("Font UUID is not valid:\n%w", err)
+	}
+
+	f, err := s.TemplateRepository.GetFont(fontUuid)
+	if err != nil {
+		return fmt.Errorf("Couldn't load font:\n%w", err)
+	}
+	if f == nil {
+		return fmt.Errorf("Font UUID does not exist:\n%w", f)
+	}
+
+	dest.Font = *f
+	return nil
 }
 
 func mapImageToJson(src *template.Image, dest *api.TemplateImage) {
