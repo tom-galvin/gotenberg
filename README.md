@@ -1,7 +1,7 @@
 # phogoprint
 
 <p align="center">
-  <img src="docs/img/phogoprint-small.png" />
+  <img src="docs/img/phogoprint-large.png" />
 </p>
 
 This is an interface for Phomemo T02/M02 thermal laser printers.
