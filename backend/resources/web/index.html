@@ -1,30 +1,14 @@
 <!DOCTYPE html>
-<html>
+<html lang="">
   <head>
-    <title>Test</title>
-    <link rel="stylesheet" type="text/css" href="style.css"></link>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vite App</title>
+    <script type="module" crossorigin src="/assets/index-DQSaIh1T.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-rSHeO0QG.css">
   </head>
   <body>
-    <div class="main-box">
-      <div>
-        <textarea id="text" style="width:384px; height:128px;"></textarea>
-        <div>
-          <button id="idButton">Print</button>
-          <span id="battery-level">Connecting...</span>
-        </div>
-        <div>
-          <form id="uploadForm">
-            <label for="fileInput">Upload a PNG file:</label>
-            <input type="file" id="fileInput" accept="image/png,image/jpeg" required>
-            <button type="submit">Upload</button>
-          </form>
-        </div>
-      </div>
-      <div>
-        <div style="display: none">Bitmap height: <span id="bitmap-height">0</span></div>
-        <canvas class="canvas" id="theCanvas"></canvas>
-      </div>
-    </div>
+    <div id="app"></div>
   </body>
-  <script type="module" src="print.js"></script>
 </html>
